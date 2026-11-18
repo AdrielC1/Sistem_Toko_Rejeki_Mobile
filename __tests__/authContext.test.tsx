@@ -1,5 +1,7 @@
 import React from "react";
 import * as Network from "expo-network";
+import * as SecureStore from "expo-secure-store";
+import { Storage } from "expo-sqlite/kv-store";
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { resetTestStorage } from "./setup";
 import {
@@ -8,6 +10,7 @@ import {
   useAuth,
 } from "@/context/AuthContext";
 import {
+  enqueueAuthStorageOp,
   getCachedStoreSettings,
   getSessionToken,
   getStoredServerUrl,
@@ -527,6 +530,262 @@ describe("AuthContext and computeRoleCapabilities", () => {
     expect(await getSessionToken()).toBeNull();
     expect(await getUserSnapshot()).toBeNull();
 
+    await unmount();
+  });
+
+  it("CR-01: serializes SecureStore auth ops and never wipes a new login when refreshUserWithBaseUrl epoch mismatches after logout+login", async () => {
+    setStoredServerUrl(BASE_URL);
+    await setSessionToken("tok_owner_old.sig");
+    await setUserSnapshot(OWNER_USER);
+    (Network.getNetworkStateAsync as jest.Mock).mockResolvedValueOnce({
+      isConnected: false,
+      isInternetReachable: false,
+      type: "NONE",
+    });
+
+    const { result, unmount } = await renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => {
+      expect(result.current.isHydrated).toBe(true);
+    });
+    expect(result.current.user).toEqual(OWNER_USER);
+
+    const refreshedOwner: AuthSessionUser = {
+      ...OWNER_USER,
+      fullName: "Owner Refreshed Late",
+    };
+
+    const fetchMock = globalThis.fetch as jest.Mock;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.endsWith("/api/auth/me")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: async () => ({ success: true, data: refreshedOwner }),
+        });
+      }
+      if (url.endsWith("/api/auth/logout")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: async () => ({ success: true }),
+        });
+      }
+      if (url.endsWith("/api/auth/login")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          _rawHeaders: [
+            ["set-cookie", "pos_session=tok_kasir_new.sig; Path=/; HttpOnly"],
+          ],
+          headers: new Headers(),
+          json: async () => ({ success: true, data: KASIR_USER }),
+        });
+      }
+      if (url.endsWith("/api/settings")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: async () => ({
+            success: true,
+            data: { storeName: "Toko Rejeki" },
+          }),
+        });
+      }
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+
+    // Pause SecureStore.setItemAsync specifically during refreshUser's snapshot write
+    const origSetItemAsync = SecureStore.setItemAsync as jest.Mock;
+    const baseSetItemImpl = origSetItemAsync.getMockImplementation();
+    let releaseSnapshotWrite!: () => void;
+    const snapshotWriteStarted = new Promise<void>((resolveStarted) => {
+      origSetItemAsync.mockImplementation(
+        async (key: string, value: string) => {
+          if (
+            key === "pos_user_snapshot" &&
+            value.includes("Owner Refreshed Late")
+          ) {
+            resolveStarted();
+            await new Promise<void>((resolveWrite) => {
+              releaseSnapshotWrite = resolveWrite;
+            });
+          }
+          if (baseSetItemImpl) {
+            return baseSetItemImpl(key, value);
+          }
+        }
+      );
+    });
+
+    let refreshPromise!: Promise<void>;
+    await act(async () => {
+      refreshPromise = result.current.refreshUser();
+    });
+    await snapshotWriteStarted;
+
+    // Queue logout + rapid new login while refresh's snapshot write is in-flight
+    let logoutPromise!: Promise<void>;
+    await act(async () => {
+      logoutPromise = result.current.logout();
+    });
+
+    // Release the in-flight snapshot write; logout clears old session cleanly in queue order
+    await act(async () => {
+      releaseSnapshotWrite();
+      await Promise.all([refreshPromise, logoutPromise]);
+    });
+    if (baseSetItemImpl) {
+      origSetItemAsync.mockImplementation(baseSetItemImpl);
+    }
+
+    let loginOk = false;
+    await act(async () => {
+      loginOk = await result.current.login("kasir1", "secret123");
+    });
+
+    expect(loginOk).toBe(true);
+    expect(result.current.user).toEqual(KASIR_USER);
+    expect(await getSessionToken()).toBe("tok_kasir_new.sig");
+    expect(await getUserSnapshot()).toEqual(KASIR_USER);
+
+    // Part B: Verify queued setUserSnapshot checks epoch === getAuthEpoch() before writing
+    let releaseQueueBlocker!: () => void;
+    const blockerPromise = enqueueAuthStorageOp(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseQueueBlocker = resolve;
+        })
+    );
+
+    const setItemSpy = SecureStore.setItemAsync as jest.Mock;
+    setItemSpy.mockClear();
+
+    let refreshQueuedPromise!: Promise<void>;
+    await act(async () => {
+      refreshQueuedPromise = result.current.refreshUser();
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${BASE_URL}/api/auth/me`,
+        expect.anything()
+      );
+    });
+
+    // Logout bumps epoch BEFORE queued snapshot write executes
+    let logoutQueuedPromise!: Promise<void>;
+    await act(async () => {
+      logoutQueuedPromise = result.current.logout();
+      releaseQueueBlocker();
+      await Promise.all([
+        blockerPromise,
+        refreshQueuedPromise,
+        logoutQueuedPromise,
+      ]);
+    });
+
+    expect(result.current.user).toBeNull();
+    expect(await getSessionToken()).toBeNull();
+    expect(await getUserSnapshot()).toBeNull();
+    expect(setItemSpy).not.toHaveBeenCalledWith(
+      "pos_user_snapshot",
+      expect.stringContaining("Owner Refreshed Late")
+    );
+
+    await unmount();
+  });
+
+  it("WR-01: refuses offline hydration and cleans up orphaned snapshot when pos_session_token is missing", async () => {
+    setStoredServerUrl(BASE_URL);
+    await setUserSnapshot(KASIR_USER);
+    expect(await getSessionToken()).toBeNull();
+    expect(await getUserSnapshot()).toEqual(KASIR_USER);
+
+    const fetchMock = globalThis.fetch as jest.Mock;
+    const { result, unmount } = await renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isHydrated).toBe(true);
+    });
+
+    expect(result.current.user).toBeNull();
+    expect(result.current.role).toBeNull();
+    expect(await getUserSnapshot()).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await unmount();
+  });
+
+  it("WR-02: handles SecureStore and kv-store write exceptions defensively without unhandled rejections", async () => {
+    setStoredServerUrl(BASE_URL);
+    setCachedStoreSettings({ storeName: "Toko Rejeki" });
+
+    const { result, unmount } = await renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => {
+      expect(result.current.isHydrated).toBe(true);
+    });
+
+    const fetchMock = globalThis.fetch as jest.Mock;
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      _rawHeaders: [
+        ["set-cookie", "pos_session=tok_fail.sig; Path=/; HttpOnly"],
+      ],
+      headers: new Headers(),
+      json: async () => ({ success: true, data: KASIR_USER }),
+    });
+
+    jest
+      .spyOn(SecureStore, "setItemAsync")
+      .mockRejectedValueOnce(new Error("Keystore locked"));
+
+    let loginOk = true;
+    await act(async () => {
+      loginOk = await result.current.login("kasir1", "secret123");
+    });
+
+    expect(loginOk).toBe(false);
+    expect(result.current.user).toBeNull();
+    expect(result.current.authError).toBeTruthy();
+    expect(await getSessionToken()).toBeNull();
+    expect(await getUserSnapshot()).toBeNull();
+
+    // kv-store write failure in saveServerUrl and testServerUrl returns { ok: false, error } cleanly
+    const setSyncSpy = jest
+      .spyOn(Storage, "setItemSync")
+      .mockImplementation(() => {
+        throw new Error("SQLITE_IOERR");
+      });
+
+    let saveRes: { ok: boolean; error?: string } = { ok: true };
+    await act(async () => {
+      saveRes = result.current.saveServerUrl("http://10.0.2.2:3000");
+    });
+    expect(saveRes.ok).toBe(false);
+    expect(saveRes.error).toBeTruthy();
+    expect(result.current.serverUrl).toBe(BASE_URL);
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { storeName: "Toko Baru" },
+      }),
+    });
+
+    let testRes!: Awaited<ReturnType<typeof result.current.testServerUrl>>;
+    await act(async () => {
+      testRes = await result.current.testServerUrl("http://10.0.2.2:3000");
+    });
+    expect(testRes.ok).toBe(false);
+    expect(testRes.error).toBeTruthy();
+    expect(result.current.serverUrl).toBe(BASE_URL);
+
+    setSyncSpy.mockRestore();
     await unmount();
   });
 });

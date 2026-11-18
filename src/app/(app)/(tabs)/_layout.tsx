@@ -45,9 +45,11 @@ function VelocityTabBar({
         const focused = index === state.index;
         const label =
           typeof options.title === "string" ? options.title : route.name;
-        const tintColor = focused
-          ? TOKENS.colors.primary
-          : TOKENS.colors.muted;
+        const activeTintColor =
+          options.tabBarActiveTintColor ?? TOKENS.colors.primary;
+        const inactiveTintColor =
+          options.tabBarInactiveTintColor ?? TOKENS.colors.muted;
+        const tintColor = focused ? activeTintColor : inactiveTintColor;
 
         const onPress = () => {
           const event = emitter.emit({
@@ -101,6 +103,7 @@ function VelocityTabBar({
               style={[
                 styles.tabLabel,
                 focused ? styles.tabLabelActive : styles.tabLabelInactive,
+                { color: tintColor },
               ]}
             >
               {label}

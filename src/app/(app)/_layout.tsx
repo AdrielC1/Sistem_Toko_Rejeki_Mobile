@@ -2,7 +2,7 @@ import { Slot } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)",
+  anchor: "(tabs)",
 };
 
 export default function AuthenticatedAppLayout() {

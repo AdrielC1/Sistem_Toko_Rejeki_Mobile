@@ -9,6 +9,7 @@ import {
   getSessionCaptureDiagnostics,
 } from "@/services/api/cookieParser";
 import {
+  clearAuthSession,
   clearSessionToken,
   isValidAuthSessionUser,
   setCachedStoreSettings,
@@ -30,6 +31,8 @@ const ERROR_COPY = {
   INACTIVE_ACCOUNT:
     "Akun ini sedang dinonaktifkan. Hubungi pemilik toko (Owner) untuk mengaktifkan kembali.",
   SERVER_UNREACHABLE: NETWORK_UNREACHABLE_ERROR,
+  SESSION_STORAGE_ERROR:
+    "Gagal menyimpan sesi login ke penyimpanan aman perangkat. Pastikan penyimpanan perangkat tersedia lalu coba lagi.",
 } as const;
 
 function parseRetryAfterSeconds(
@@ -38,7 +41,8 @@ function parseRetryAfterSeconds(
 ): number {
   if (
     typeof parsedBody?.retryAfter === "number" &&
-    Number.isFinite(parsedBody.retryAfter)
+    Number.isFinite(parsedBody.retryAfter) &&
+    parsedBody.retryAfter > 0
   ) {
     return Math.max(1, Math.ceil(parsedBody.retryAfter));
   }
@@ -167,14 +171,23 @@ export async function loginWithCredentials(
     );
   }
 
-  if (token !== null) {
-    await setSessionToken(token);
-  } else {
-    // Ensure no stale previous user's pos_session_token survives on 200 login
-    await clearSessionToken();
-  }
+  try {
+    if (token !== null) {
+      await setSessionToken(token);
+    } else {
+      // Ensure no stale previous user's pos_session_token survives on 200 login
+      await clearSessionToken();
+    }
 
-  await setUserSnapshot(parsedBody.data);
+    await setUserSnapshot(parsedBody.data);
+  } catch {
+    await clearAuthSession();
+    return {
+      ok: false,
+      status: 500,
+      error: ERROR_COPY.SESSION_STORAGE_ERROR,
+    };
+  }
   bumpAuthEpoch();
 
   return {

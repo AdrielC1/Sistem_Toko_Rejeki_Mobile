@@ -18,6 +18,21 @@ const VALID_ROLES: ReadonlySet<string> = new Set<UserRole>([
   "kasir",
 ]);
 
+let authStorageQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Serializes async `SecureStore` auth reads, writes, and clears so concurrent
+ * refresh/logout/login flows never interleave out of order.
+ */
+export function enqueueAuthStorageOp<T>(op: () => Promise<T>): Promise<T> {
+  const run = authStorageQueue.then(op, op);
+  authStorageQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
 export function isValidAuthSessionUser(value: unknown): value is AuthSessionUser {
   if (!value || typeof value !== "object") {
     return false;
@@ -47,21 +62,12 @@ function isValidStoreSettings(value: unknown): value is StoreSettings {
   );
 }
 
-export async function getSessionToken(): Promise<string | null> {
-  try {
-    const token = await SecureStore.getItemAsync(SECURE_KEYS.SESSION_TOKEN);
-    return token && token.length > 0 ? token : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function setSessionToken(token: string): Promise<void> {
+async function writeSessionTokenRaw(token: string): Promise<void> {
   // Never pass requireAuthentication: true (unsupported in Expo Go).
   await SecureStore.setItemAsync(SECURE_KEYS.SESSION_TOKEN, token);
 }
 
-export async function clearSessionToken(): Promise<void> {
+async function deleteSessionTokenRaw(): Promise<void> {
   try {
     await SecureStore.deleteItemAsync(SECURE_KEYS.SESSION_TOKEN);
   } catch {
@@ -69,20 +75,7 @@ export async function clearSessionToken(): Promise<void> {
   }
 }
 
-export async function getUserSnapshot(): Promise<AuthSessionUser | null> {
-  try {
-    const raw = await SecureStore.getItemAsync(SECURE_KEYS.USER_SNAPSHOT);
-    if (!raw) {
-      return null;
-    }
-    const parsed: unknown = JSON.parse(raw);
-    return isValidAuthSessionUser(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function setUserSnapshot(user: AuthSessionUser): Promise<void> {
+async function writeUserSnapshotRaw(user: AuthSessionUser): Promise<void> {
   const compactSnapshot: AuthSessionUser = {
     id: user.id,
     username: user.username,
@@ -96,7 +89,7 @@ export async function setUserSnapshot(user: AuthSessionUser): Promise<void> {
   );
 }
 
-export async function clearUserSnapshot(): Promise<void> {
+async function deleteUserSnapshotRaw(): Promise<void> {
   try {
     await SecureStore.deleteItemAsync(SECURE_KEYS.USER_SNAPSHOT);
   } catch {
@@ -104,8 +97,65 @@ export async function clearUserSnapshot(): Promise<void> {
   }
 }
 
-export async function clearAuthSession(): Promise<void> {
-  await Promise.all([clearSessionToken(), clearUserSnapshot()]);
+export async function getSessionToken(): Promise<string | null> {
+  return enqueueAuthStorageOp(async () => {
+    try {
+      const token = await SecureStore.getItemAsync(SECURE_KEYS.SESSION_TOKEN);
+      return token && token.length > 0 ? token : null;
+    } catch {
+      return null;
+    }
+  });
+}
+
+export async function setSessionToken(token: string): Promise<void> {
+  return enqueueAuthStorageOp(() => writeSessionTokenRaw(token));
+}
+
+export async function clearSessionToken(): Promise<void> {
+  return enqueueAuthStorageOp(() => deleteSessionTokenRaw());
+}
+
+export async function getUserSnapshot(): Promise<AuthSessionUser | null> {
+  return enqueueAuthStorageOp(async () => {
+    try {
+      const raw = await SecureStore.getItemAsync(SECURE_KEYS.USER_SNAPSHOT);
+      if (!raw) {
+        return null;
+      }
+      const parsed: unknown = JSON.parse(raw);
+      return isValidAuthSessionUser(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
+}
+
+export async function setUserSnapshot(
+  user: AuthSessionUser,
+  shouldCommit?: () => boolean
+): Promise<void> {
+  return enqueueAuthStorageOp(async () => {
+    if (shouldCommit && !shouldCommit()) {
+      return;
+    }
+    await writeUserSnapshotRaw(user);
+  });
+}
+
+export async function clearUserSnapshot(): Promise<void> {
+  return enqueueAuthStorageOp(() => deleteUserSnapshotRaw());
+}
+
+export async function clearAuthSession(
+  shouldCommit?: () => boolean
+): Promise<void> {
+  return enqueueAuthStorageOp(async () => {
+    if (shouldCommit && !shouldCommit()) {
+      return;
+    }
+    await Promise.all([deleteSessionTokenRaw(), deleteUserSnapshotRaw()]);
+  });
 }
 
 export function getStoredServerUrl(): string | null {
@@ -121,8 +171,13 @@ export function getStoredServerUrl(): string | null {
   }
 }
 
-export function setStoredServerUrl(url: string): void {
-  Storage.setItemSync(KV_KEYS.SERVER_BASE_URL, url);
+export function setStoredServerUrl(url: string): boolean {
+  try {
+    Storage.setItemSync(KV_KEYS.SERVER_BASE_URL, url);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function clearStoredServerUrl(): void {
@@ -146,6 +201,11 @@ export function getCachedStoreSettings(): StoreSettings | null {
   }
 }
 
-export function setCachedStoreSettings(settings: StoreSettings): void {
-  Storage.setItemSync(KV_KEYS.STORE_SETTINGS, JSON.stringify(settings));
+export function setCachedStoreSettings(settings: StoreSettings): boolean {
+  try {
+    Storage.setItemSync(KV_KEYS.STORE_SETTINGS, JSON.stringify(settings));
+    return true;
+  } catch {
+    return false;
+  }
 }

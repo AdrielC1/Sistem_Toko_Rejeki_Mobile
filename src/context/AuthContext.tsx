@@ -25,7 +25,6 @@ import {
   getSessionToken,
   getStoredServerUrl,
   getUserSnapshot,
-  setCachedStoreSettings,
   setStoredServerUrl,
   setUserSnapshot,
 } from "@/services/storage/secureStorage";
@@ -47,6 +46,10 @@ const BLANK_CREDENTIALS_ERROR =
   "Username dan kata sandi wajib diisi sebelum masuk.";
 const MISSING_SERVER_URL_ERROR =
   "Alamat server belum diatur. Buka panel Alamat Server API, masukkan URL server toko, lalu ketuk Tes Koneksi Server.";
+const LOGIN_STORAGE_ERROR =
+  "Gagal menyimpan sesi login ke penyimpanan aman perangkat. Pastikan penyimpanan perangkat tersedia lalu coba lagi.";
+const SERVER_URL_STORAGE_ERROR =
+  "Gagal menyimpan alamat server ke penyimpanan lokal perangkat. Silakan coba lagi.";
 
 export interface AuthContextValue {
   user: AuthSessionUser | null;
@@ -147,21 +150,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (res.status === 200 && res.user) {
-      setUser(res.user);
-      await setUserSnapshot(res.user);
-      // Guard against logout() occurring while setUserSnapshot awaited SecureStore
-      if (epoch !== getAuthEpoch()) {
-        await clearAuthSession();
-        return;
+      const refreshedUser = res.user;
+      try {
+        await setUserSnapshot(refreshedUser, () => epoch === getAuthEpoch());
+      } catch {
+        // Preserve existing cached snapshot if native SecureStore write fails.
+      }
+      if (isMountedRef.current && epoch === getAuthEpoch()) {
+        setUser(refreshedUser);
       }
       return;
     }
 
     if (res.status === 401 || res.status === 403 || res.sessionRevoked) {
-      await clearAuthSession();
-      if (!isMountedRef.current || epoch !== getAuthEpoch()) {
-        return;
-      }
+      // apiRequest owns clearAuthSession() for 401 and /api/auth/me 403.
       setUser(null);
       setSessionNotice(SESSION_INVALID_NOTICE);
     }
@@ -191,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const mountEpoch = getAuthEpoch();
       const initialServerUrl = getStoredServerUrl();
       const initialSettings = getCachedStoreSettings();
-      const [snapshotUser] = await Promise.all([
+      const [snapshotUser, sessionToken] = await Promise.all([
         getUserSnapshot(),
         getSessionToken(),
       ]);
@@ -205,13 +207,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setServerUrl(initialServerUrl);
       setStoreSettings(initialSettings);
 
-      if (snapshotUser && mountEpoch === getAuthEpoch()) {
+      const hasValidOfflineSession = Boolean(snapshotUser && sessionToken);
+      if (hasValidOfflineSession && mountEpoch === getAuthEpoch()) {
         setUser(snapshotUser);
+      } else if (
+        snapshotUser &&
+        !sessionToken &&
+        mountEpoch === getAuthEpoch()
+      ) {
+        await clearAuthSession(() => mountEpoch === getAuthEpoch());
+      }
+
+      if (cancelled || !isMountedRef.current) {
+        return;
       }
       setIsHydrated(true);
 
       if (
-        snapshotUser &&
+        hasValidOfflineSession &&
         initialServerUrl &&
         mountEpoch === getAuthEpoch()
       ) {
@@ -292,12 +305,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSessionNotice(null);
 
           if (!storeSettingsRef.current) {
-            void fetchPublicSettings(activeUrl).then((settings) => {
-              if (settings && isMountedRef.current) {
-                storeSettingsRef.current = settings;
-                setStoreSettings(settings);
-              }
-            });
+            void fetchPublicSettings(activeUrl)
+              .then((settings) => {
+                if (settings && isMountedRef.current) {
+                  storeSettingsRef.current = settings;
+                  setStoreSettings(settings);
+                }
+              })
+              .catch(() => {});
           }
           return true;
         }
@@ -307,6 +322,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           startRetryCountdown(result.retryAfterSeconds);
         } else {
           setAuthError(result.error);
+        }
+        return false;
+      } catch {
+        if (isMountedRef.current) {
+          setAuthError(LOGIN_STORAGE_ERROR);
         }
         return false;
       } finally {
@@ -361,7 +381,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!normalized.ok) {
         return normalized;
       }
-      setStoredServerUrl(normalized.url);
+      try {
+        const saved = setStoredServerUrl(normalized.url);
+        if (!saved) {
+          return { ok: false, error: SERVER_URL_STORAGE_ERROR };
+        }
+      } catch {
+        return { ok: false, error: SERVER_URL_STORAGE_ERROR };
+      }
       serverUrlRef.current = normalized.url;
       setServerUrl(normalized.url);
       return normalized;
@@ -371,14 +398,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const testServerUrl = useCallback(
     async (rawUrl: string): Promise<ConnectionTestResult> => {
-      const result = await testServerConnection(rawUrl);
+      let result: ConnectionTestResult;
+      try {
+        result = await testServerConnection(rawUrl);
+      } catch {
+        return {
+          ok: false,
+          latencyMs: 0,
+          error: SERVER_URL_STORAGE_ERROR,
+        };
+      }
       if (!result.ok) {
         return result;
       }
 
       const normalized = normalizeServerUrl(rawUrl);
       if (normalized.ok) {
-        setStoredServerUrl(normalized.url);
+        try {
+          const saved = setStoredServerUrl(normalized.url);
+          if (!saved) {
+            return {
+              ok: false,
+              latencyMs: result.latencyMs,
+              error: SERVER_URL_STORAGE_ERROR,
+            };
+          }
+        } catch {
+          return {
+            ok: false,
+            latencyMs: result.latencyMs,
+            error: SERVER_URL_STORAGE_ERROR,
+          };
+        }
         serverUrlRef.current = normalized.url;
         if (isMountedRef.current) {
           setServerUrl(normalized.url);
@@ -386,7 +437,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (result.storeSettings) {
-        setCachedStoreSettings(result.storeSettings);
         storeSettingsRef.current = result.storeSettings;
         if (isMountedRef.current) {
           setStoreSettings(result.storeSettings);

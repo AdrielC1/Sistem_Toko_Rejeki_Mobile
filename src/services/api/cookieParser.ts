@@ -11,7 +11,7 @@ export interface SessionCaptureDiagnostics {
   length: number;
 }
 
-const POS_SESSION_REGEX = /(?:^|,\s*|;\s*|\s)pos_session=([A-Za-z0-9_.-]+)/i;
+const POS_SESSION_REGEX = /(?:^|,\s*)pos_session=([A-Za-z0-9_.-]+)/;
 
 /**
  * Extracts `pos_session` across Node/Jest (`getSetCookie`), `expo/fetch` (`_rawHeaders`),
@@ -59,7 +59,8 @@ export function extractPosSessionFromResponse(
   }
 
   // 3. Fallback to whatwg-fetch comma-joined headers.get("set-cookie")
-  if (typeof res.headers?.get === "function") {
+  // only when structured Set-Cookie sources produced no rows
+  if (candidates.length === 0 && typeof res.headers?.get === "function") {
     const headerStr = res.headers.get("set-cookie");
     if (typeof headerStr === "string" && headerStr.length > 0) {
       candidates.push(headerStr);

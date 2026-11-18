@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Image,
   KeyboardAvoidingView,
@@ -46,11 +46,20 @@ export default function LoginScreen() {
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [failedLogoUri, setFailedLogoUri] = useState<string | null>(null);
   const passwordInputRef = useRef<InputFieldHandle | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const storeName = storeSettings?.storeName?.trim() || "Toko Rejeki";
   const storeLogo = storeSettings?.storeLogo?.trim() || "";
-  const hasLogo = storeLogo.length > 0;
+  const hasLogo = storeLogo.length > 0 && failedLogoUri !== storeLogo;
 
   const isThrottled = retryAfterSeconds > 0;
   const activeError = authError ?? sessionNotice;
@@ -64,9 +73,13 @@ export default function LoginScreen() {
       void Haptics.selectionAsync().catch(() => {});
     }
 
-    const ok = await login(username, password);
-    if (ok) {
-      setPassword("");
+    try {
+      const ok = await login(username, password);
+      if (ok && isMountedRef.current) {
+        setPassword("");
+      }
+    } catch {
+      // AuthContext.login surfaces errors into authError; catch defensively against unhandled rejections.
     }
   };
 
@@ -98,6 +111,7 @@ export default function LoginScreen() {
                       accessibilityLabel={storeName}
                       style={styles.brandLogoImage}
                       resizeMode="cover"
+                      onError={() => setFailedLogoUri(storeLogo)}
                     />
                   ) : (
                     <Text style={styles.brandMonogram}>TR</Text>

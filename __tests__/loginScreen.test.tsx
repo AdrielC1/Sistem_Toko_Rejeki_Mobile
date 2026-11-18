@@ -363,4 +363,82 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
 
     await second.unmount();
   });
+
+  it("WR-05: locks ServerUrlPanel input & hint chips during test and ignores unmount completion cleanly", async () => {
+    const fetchMock = globalThis.fetch as jest.Mock;
+    let resolveTest!: (value: unknown) => void;
+    fetchMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveTest = resolve;
+      })
+    );
+
+    const view = await renderLogin();
+    await waitFor(() => {
+      expect(screen.getByTestId("server-url-input")).toBeTruthy();
+    });
+
+    await fireEvent.changeText(
+      screen.getByTestId("server-url-input"),
+      BASE_URL
+    );
+    await fireEvent.press(screen.getByTestId("server-test-button"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Menguji Koneksi...")).toBeTruthy();
+    });
+
+    expect(screen.getByTestId("server-url-input").props.editable).toBe(false);
+    expect(
+      screen.getByTestId("server-hint-lan").props.accessibilityState.disabled
+    ).toBe(true);
+    expect(
+      screen.getByTestId("server-hint-emulator").props.accessibilityState
+        .disabled
+    ).toBe(true);
+
+    // Attempt mid-flight edit and hint chip tap -> draftUrl remains unchanged
+    await fireEvent.press(screen.getByTestId("server-hint-emulator"));
+    await fireEvent.changeText(
+      screen.getByTestId("server-url-input"),
+      "http://10.0.2.2:3000"
+    );
+    expect(screen.getByTestId("server-url-input").props.value).toBe(BASE_URL);
+
+    // Unmount while request is still pending, then resolve without errors
+    await view.unmount();
+    await act(async () => {
+      resolveTest({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: { storeName: "Toko Unmounted" },
+        }),
+      });
+    });
+  });
+
+  it("WR-06: falls back to TR monogram when storeLogo image fails to load", async () => {
+    setStoredServerUrl(BASE_URL);
+    setCachedStoreSettings({
+      storeName: "Toko Rejeki Error Logo",
+      storeLogo: "https://invalid.example.com/missing-logo.png",
+    });
+
+    const view = await renderLogin();
+    await waitFor(() => {
+      expect(screen.getByTestId("store-logo-image")).toBeTruthy();
+    });
+    expect(screen.queryByText("TR")).toBeNull();
+
+    await fireEvent(screen.getByTestId("store-logo-image"), "error");
+
+    await waitFor(() => {
+      expect(screen.getByText("TR")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("store-logo-image")).toBeNull();
+
+    await view.unmount();
+  });
 });

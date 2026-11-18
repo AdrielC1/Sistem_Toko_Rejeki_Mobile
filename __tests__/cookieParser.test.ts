@@ -69,6 +69,35 @@ describe("cookieParser", () => {
     expect(extractPosSessionFromResponse(null)).toBeNull();
   });
 
+  it("IN-02: enforces case-sensitive cookie name and ignores attribute/space boundaries or redundant fallback", () => {
+    const uppercaseCookie: CookieResponseLike = {
+      _rawHeaders: [["set-cookie", "POS_SESSION=wrong_case.sig; Path=/"]],
+    };
+    const semicolonBoundary: CookieResponseLike = {
+      headers: {
+        get: () => "theme=light; pos_session=attribute_spoof; Path=/",
+      },
+    };
+    const whitespaceBoundary: CookieResponseLike = {
+      headers: {
+        get: () => "note=hello pos_session=space_spoof; Path=/",
+      },
+    };
+    const structuredWinsWithoutFallback: CookieResponseLike = {
+      _rawHeaders: [["set-cookie", "theme=light; Path=/"]],
+      headers: {
+        get: () => "pos_session=should_not_fallback_when_structured_present",
+      },
+    };
+
+    expect(extractPosSessionFromResponse(uppercaseCookie)).toBeNull();
+    expect(extractPosSessionFromResponse(semicolonBoundary)).toBeNull();
+    expect(extractPosSessionFromResponse(whitespaceBoundary)).toBeNull();
+    expect(
+      extractPosSessionFromResponse(structuredWinsWithoutFallback)
+    ).toBeNull();
+  });
+
   it("returns boolean and length diagnostics without exposing raw token bytes", () => {
     const rawToken = "secret_payload_abc.secret_signature_xyz";
     const captured = getSessionCaptureDiagnostics(rawToken);

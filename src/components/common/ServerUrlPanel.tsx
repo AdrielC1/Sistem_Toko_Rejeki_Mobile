@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronUp, Server, Wifi } from "lucide-react-native";
 import {
@@ -43,14 +43,24 @@ export function ServerUrlPanel({
   const [draftUrl, setDraftUrl] = useState<string>(savedServerUrl ?? "");
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<PanelFeedback | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   if (savedServerUrl !== prevSavedUrl) {
     setPrevSavedUrl(savedServerUrl);
-    if (savedServerUrl) {
-      if (draftUrl.trim().length === 0 && defaultExpanded === undefined) {
-        setExpanded(false);
-      }
-      setDraftUrl(savedServerUrl);
+    setDraftUrl(savedServerUrl ?? "");
+    if (
+      savedServerUrl &&
+      draftUrl.trim().length === 0 &&
+      defaultExpanded === undefined
+    ) {
+      setExpanded(false);
     }
   }
 
@@ -59,6 +69,9 @@ export function ServerUrlPanel({
   };
 
   const handleSelectHint = (hintUrl: string) => {
+    if (isTesting) {
+      return;
+    }
     setDraftUrl(hintUrl);
     setFeedback(null);
   };
@@ -93,6 +106,9 @@ export function ServerUrlPanel({
 
     try {
       const result = await onTestConnection(draftUrl);
+      if (!isMountedRef.current) {
+        return;
+      }
       if (!result.ok) {
         setFeedback({
           variant: "error",
@@ -107,8 +123,17 @@ export function ServerUrlPanel({
         title: "Server Terhubung",
         message: `${storeLabel} merespons (${result.latencyMs} ms).`,
       });
+    } catch {
+      if (isMountedRef.current) {
+        setFeedback({
+          variant: "error",
+          message: SERVER_URL_INVALID_ERROR,
+        });
+      }
     } finally {
-      setIsTesting(false);
+      if (isMountedRef.current) {
+        setIsTesting(false);
+      }
     }
   };
 
@@ -149,7 +174,11 @@ export function ServerUrlPanel({
             testID="server-url-input"
             label="URL Server Toko"
             value={draftUrl}
+            editable={!isTesting}
             onChangeText={(text) => {
+              if (isTesting) {
+                return;
+              }
               setDraftUrl(text);
               if (feedback) {
                 setFeedback(null);
@@ -167,12 +196,15 @@ export function ServerUrlPanel({
           <View style={styles.hintRow}>
             <Pressable
               testID="server-hint-lan"
+              disabled={isTesting}
               onPress={() => handleSelectHint(SERVER_URL_HINTS.lanExample)}
               accessibilityRole="button"
+              accessibilityState={{ disabled: isTesting }}
               accessibilityLabel={`Gunakan contoh LAN ${SERVER_URL_HINTS.lanExample}`}
               style={({ pressed }) => [
                 styles.hintChip,
-                pressed && styles.triggerPressed,
+                isTesting && styles.hintChipDisabled,
+                pressed && !isTesting && styles.triggerPressed,
               ]}
             >
               <Text style={styles.hintChipText}>
@@ -181,12 +213,15 @@ export function ServerUrlPanel({
             </Pressable>
             <Pressable
               testID="server-hint-emulator"
+              disabled={isTesting}
               onPress={() => handleSelectHint(SERVER_URL_HINTS.androidEmulator)}
               accessibilityRole="button"
+              accessibilityState={{ disabled: isTesting }}
               accessibilityLabel={`Gunakan Emulator Android ${SERVER_URL_HINTS.androidEmulator}`}
               style={({ pressed }) => [
                 styles.hintChip,
-                pressed && styles.triggerPressed,
+                isTesting && styles.hintChipDisabled,
+                pressed && !isTesting && styles.triggerPressed,
               ]}
             >
               <Text style={styles.hintChipText}>
@@ -292,6 +327,9 @@ const styles = StyleSheet.create({
     borderColor: TOKENS.colors.borderSubtle,
     justifyContent: "center",
     alignItems: "center",
+  },
+  hintChipDisabled: {
+    opacity: 0.6,
   },
   hintChipText: {
     fontFamily: FONT_FAMILY.mono,

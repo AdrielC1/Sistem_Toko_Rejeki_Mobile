@@ -90,11 +90,7 @@ export async function apiFetch(
     headers.set("Cookie", `pos_session=${resolvedToken}`);
   }
 
-  if (
-    rest.body !== undefined &&
-    rest.body !== null &&
-    !headers.has("Content-Type")
-  ) {
+  if (typeof rest.body === "string" && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -226,7 +222,9 @@ export async function apiRequest<T = unknown>(
     };
   }
 
-  const isSuccess = res.ok && (rawBody ? rawBody.success !== false : true);
+  const isSuccess =
+    res.ok &&
+    (res.status === 204 || (rawBody !== null && rawBody.success !== false));
   const errorMessage = !isSuccess
     ? typeof rawBody?.error === "string" && rawBody.error.trim().length > 0
       ? rawBody.error

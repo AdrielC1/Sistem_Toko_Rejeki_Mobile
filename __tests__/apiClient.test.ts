@@ -373,4 +373,54 @@ describe("apiClient and authApi", () => {
     });
     expect(getCachedStoreSettings()).toEqual(settings);
   });
+
+  it("IN-03 & IN-04: preserves FormData Content-Type, requires JSON on 200 (allows 204), and skips non-positive retryAfter", async () => {
+    const fetchMock = globalThis.fetch as jest.Mock;
+
+    // IN-03a: FormData / non-string body does not force Content-Type: application/json
+    const formData = new FormData();
+    formData.append("file", "dummy");
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+      headers: new Headers(),
+      json: async () => {
+        throw new Error("No body");
+      },
+    });
+    const res204 = await apiRequest(BASE_URL, "/api/upload", {
+      method: "POST",
+      body: formData as unknown as BodyInit,
+    });
+    const [, uploadInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(uploadInit.headers).get("Content-Type")).toBeNull();
+    expect(res204.ok).toBe(true);
+    expect(res204.status).toBe(204);
+
+    // IN-03b: HTTP 200 with non-JSON body (e.g., captive portal HTML) is treated as failure
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON");
+      },
+    });
+    const nonJson200 = await apiRequest(BASE_URL, "/api/auth/me");
+    expect(nonJson200.ok).toBe(false);
+    expect(nonJson200.status).toBe(200);
+
+    // IN-04: retryAfter <= 0 falls back to Retry-After HTTP header
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "Retry-After": "7" }),
+      json: async () => ({ success: false, retryAfter: 0 }),
+    });
+    const res429 = await loginWithCredentials(BASE_URL, "kasir1", "wrong");
+    expect(res429.ok).toBe(false);
+    if (!res429.ok) {
+      expect(res429.retryAfterSeconds).toBe(7);
+    }
+  });
 });
