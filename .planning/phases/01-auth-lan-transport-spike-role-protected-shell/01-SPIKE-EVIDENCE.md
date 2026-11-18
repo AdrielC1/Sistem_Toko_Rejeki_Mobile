@@ -1,8 +1,9 @@
 ---
 phase: "01-auth-lan-transport-spike-role-protected-shell"
 plan: "06"
-status: "pending_user_spike"
+status: "approved"
 created: "2026-11-18T21:15:00+07:00"
+approved_at: "2026-11-18T22:18:07+07:00"
 spike_gate: "D-05"
 backend_repo: "Apps_Toko_Rejeki (apps_toko_rejeki / unmodified)"
 ---
@@ -38,10 +39,10 @@ Executed from `C:\Users\adrie\Desktop\Project\Apps_Toko_Rejeki_Mobile`:
 
 ## 3. Physical Device / Emulator Cold-Kill Spike Sign-Off (`D-05` Gate)
 
-- **Status:** ⏳ **Awaiting user execution & sign-off (`blocking-human`)**
-- **Targets to verify by user:**
+- **Status:** ✅ **APPROVED by user (`2026-11-18T22:18:07+07:00`)** — User confirmed all Phase 1 live spike checks passed (`"okeh saya cek sih udh aman semua approved"`).
+- **Verified Targets (`D-05` passed without backend changes):**
   1. `AUTH-02` Pre-login `GET /api/settings` reachability (`Server Terhubung`) & login branding update (`storeName` / `storeLogo`) + collapsed/long URL truncation (`E2`).
   2. `AUTH-01` & `D-03` Blank `400`, wrong password `401`, throttle `429` 1-second countdown (`Tunggu {N} Detik...`), Eye/EyeOff toggle, and `__DEV__` `[AuthSpike] pos_session capture: { captured: true, length: >0 }` (zero token bytes logged).
   3. `AUTH-03` OS Force-Kill + Airplane Mode relaunch → direct entry into 4-tab shell (`Kasir`) without redirect to Login.
-  4. `AUTH-03` & `D-04` / `D-05` Reconnect Wi-Fi + Force-Kill + relaunch → online `GET /api/auth/me` returns `200 OK` (NOT `401`). *(STOP RULE: HALT and reply `SPIKE FAILED: ...` if `captured: false` or `401` on relaunch.)*
+  4. `AUTH-03` & `D-04` / `D-05` Reconnect Wi-Fi + Force-Kill + relaunch → online `GET /api/auth/me` returns `200 OK` (NOT `401`).
   5. `AUTH-04`, `NAV-01`, `NAV-04` Fail-safe Airplane-Mode `Keluar dari Akun`, `owner` vs `kasir` (`Mode Baca Saja (Kasir)`, zero `costPrice`/mutations), hardware Back stack reset, and 1-line bottom tab labels under light mode (`E1`–`E4` visual backstops).
