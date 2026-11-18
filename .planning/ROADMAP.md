@@ -32,23 +32,23 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. User can sign out via a confirmation modal calling fail-safe `POST /api/auth/logout` (clearing local session state even when offline) and return cleanly to Login (`AUTH-04`).
   5. Logging in as `kasir`, `admin`, or `owner` enforces `<Stack.Protected>` role guards (`kasir` restricted to read-only catalog policy; `admin`/`owner` access enabled) and resets navigation history cleanly on account switch (`NAV-04`).
 **Verification / Research Flag**: CRITICAL — On-Device Auth/Cookie Cold-Kill Spike & LAN Cleartext Config. Must validate `pos_session` `httpOnly` cookie survival across process kills and offline relaunch on physical Android/iOS (comparing `expo/fetch` `Set-Cookie` capture into `expo-secure-store` vs RN `fetch` `credentials: "include"`), configure `app.config.ts` (`expo-build-properties` `usesCleartextTraffic: true`, iOS `NSAllowsLocalNetworking` & `NSLocalNetworkUsageDescription`), verify strictly on emulator/device (never Expo Web where `sec-fetch-site` triggers `403`), and consult the user before modifying `Apps_Toko_Rejeki` if a Bearer opt-in fallback or `expo-dev-client` cookie manager is required.
-**Plans:** 6 plans
+**Plans:** 5/6 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 01-01-PLAN.md — Pre-install `SUS` Package Legitimacy Gate, Expo SDK 58 + LAN cleartext `app.config.ts`, ESLint/Jest Wave 0, and clean placeholder routes (`AUTH-02`, `AUTH-03`)
+- [x] 01-01-PLAN.md — Pre-install `SUS` Package Legitimacy Gate, Expo SDK 58 + LAN cleartext `app.config.ts`, ESLint/Jest Wave 0, and clean placeholder routes (`AUTH-02`, `AUTH-03`)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 01-02-PLAN.md — Core auth types, dual-tier `SecureStore`/`kv-store` storage, Server URL validation, `cookieParser`, `apiClient`, and `authApi` + unit tests (`AUTH-01`–`AUTH-04`)
+- [x] 01-02-PLAN.md — Core auth types, dual-tier `SecureStore`/`kv-store` storage, Server URL validation, `cookieParser`, `apiClient`, and `authApi` + unit tests (`AUTH-01`–`AUTH-04`)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 01-03-PLAN.md — Velocity Blue tokens/UI, collapsible `ServerUrlPanel`, `AuthContext` state machine, Login screen, and `loginScreen.test.tsx` (`AUTH-01`–`AUTH-04`)
+- [x] 01-03-PLAN.md — Velocity Blue tokens/UI, collapsible `ServerUrlPanel`, `AuthContext` state machine, Login screen, and `loginScreen.test.tsx` (`AUTH-01`–`AUTH-04`)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 01-04-PLAN.md — `LogoutConfirmModal` and the four role-aware Velocity Blue tab screens (`Kasir`, `Produk`, `Pesanan`, `Pengaturan`) (`AUTH-02`, `AUTH-04`, `NAV-01`, `NAV-04`)
+- [x] 01-04-PLAN.md — `LogoutConfirmModal` and the four role-aware Velocity Blue tab screens (`Kasir`, `Produk`, `Pesanan`, `Pengaturan`) (`AUTH-02`, `AUTH-04`, `NAV-01`, `NAV-04`)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 01-05-PLAN.md — Root `<Stack.Protected>` boot gate, keyed `user.id:user.role` stack reset, 4-tab JS `<Tabs>` bar, and `routingRbac.test.tsx` (`AUTH-03`, `AUTH-04`, `NAV-01`, `NAV-04`)
+- [x] 01-05-PLAN.md — Root `<Stack.Protected>` boot gate, keyed `user.id:user.role` stack reset, 4-tab JS `<Tabs>` bar, and `routingRbac.test.tsx` (`AUTH-03`, `AUTH-04`, `NAV-01`, `NAV-04`)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 01-06-PLAN.md — Full automated suite pre-flight and Physical Device / Emulator Cold-Kill Spike (`D-05` gate) (`AUTH-01`–`AUTH-04`, `NAV-01`, `NAV-04`)
@@ -119,7 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Auth, LAN Transport Spike & Role-Protected Shell | 0/0 | Not started | - |
+| 1. Auth, LAN Transport Spike & Role-Protected Shell | 5/6 | In Progress | - |
 | 2. Offline SQLite Catalog, Sync Engine & Health Header | 0/0 | Not started | - |
 | 3. Kasir Mobile POS & Multi-Mode Thermal Checkout | 0/0 | Not started | - |
 | 4. Produk & Pesanan Aktif (List → Detail Flows & CRUD) | 0/0 | Not started | - |

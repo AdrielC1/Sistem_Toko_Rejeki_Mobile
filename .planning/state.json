@@ -1,0 +1,38 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "phases": [
+    {
+      "number": "1",
+      "name": "Auth, LAN Transport Spike & Role-Protected Shell",
+      "status": "in_progress"
+    },
+    {
+      "number": "2",
+      "name": "Offline SQLite Catalog, Sync Engine & Health Header",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "Kasir Mobile POS & Multi-Mode Thermal Checkout",
+      "status": "pending"
+    },
+    {
+      "number": "4",
+      "name": "Produk & Pesanan Aktif (List → Detail Flows & CRUD)",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "Pengaturan Hub, Profile/About & Owner Administration",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 1 of 5 · 0% · executing"
+  },
+  "updated_at": "2026-11-18T13:29:50.953Z"
+}
