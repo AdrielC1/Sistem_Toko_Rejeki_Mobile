@@ -3,9 +3,10 @@ import {
   clearAuthSession,
   getSessionToken,
 } from "@/services/storage/secureStorage";
-import type { ApiResponse } from "@/types";
+import type { ApiResponse, ServerRoute, ServerUrlConfig } from "@/types";
 
 const DEFAULT_TIMEOUT_MS = 8000;
+const DEFAULT_LAN_TIMEOUT_MS = 2000;
 
 export const NETWORK_UNREACHABLE_ERROR =
   "Server atau database toko tidak merespons. Periksa Alamat Server API dan pastikan perangkat berada di Wi-Fi toko yang sama.";
@@ -31,8 +32,47 @@ export interface ApiRequestResult<T = unknown> {
   response: Response | null;
 }
 
+export interface FailoverApiRequestResult<T = unknown>
+  extends ApiRequestResult<T> {
+  usedRoute: ServerRoute | null;
+  resolvedBaseUrl: string | null;
+}
+
 let authEpoch = 0;
+let activeRoute: ServerRoute = "lan";
 const sessionRevokedHandlers = new Set<(reason: string) => void>();
+const activeRouteHandlers = new Set<(route: ServerRoute) => void>();
+
+export function getActiveRoute(): ServerRoute {
+  return activeRoute;
+}
+
+export function setActiveRoute(route: ServerRoute): void {
+  if (activeRoute === route) {
+    return;
+  }
+  activeRoute = route;
+  for (const handler of activeRouteHandlers) {
+    try {
+      handler(route);
+    } catch {
+      // Isolate subscriber errors
+    }
+  }
+}
+
+export function subscribeActiveRoute(
+  fn: (route: ServerRoute) => void
+): () => void {
+  activeRouteHandlers.add(fn);
+  return () => {
+    activeRouteHandlers.delete(fn);
+  };
+}
+
+export function resetActiveRouteForTest(): void {
+  activeRoute = "lan";
+}
 
 export function getAuthEpoch(): number {
   return authEpoch;
@@ -245,5 +285,106 @@ export async function apiRequest<T = unknown>(
     stale: capturedEpoch !== getAuthEpoch(),
     headers: res.headers ?? null,
     response: res,
+  };
+}
+
+function shouldFailOverResponse<T>(result: ApiRequestResult<T>): boolean {
+  if (result.sessionRevoked) {
+    return false;
+  }
+  if (result.networkError) {
+    return true;
+  }
+  return result.rawBody === null && result.status >= 502;
+}
+
+/**
+ * Smart Auto LAN -> Cloud failover wrapper over `apiRequest`.
+ * Tries active route first (`lan` by default with 2000ms timeout); fails over ONLY
+ * on `networkError === true` or `(rawBody === null && status >= 502)`.
+ * NEVER fails over on 400, 401, 403, 404, 429, or structured 503 `{ offline: true }`.
+ */
+export async function apiRequestWithFailover<T = unknown>(
+  config: ServerUrlConfig,
+  path: string,
+  options: ApiFetchOptions = {}
+): Promise<FailoverApiRequestResult<T>> {
+  const candidates: {
+    route: ServerRoute;
+    baseUrl: string;
+    timeoutMs?: number;
+  }[] = [];
+
+  if (config.primaryUrl) {
+    candidates.push({
+      route: "lan",
+      baseUrl: config.primaryUrl,
+      timeoutMs: options.timeoutMs ?? DEFAULT_LAN_TIMEOUT_MS,
+    });
+  }
+  if (config.fallbackUrl) {
+    candidates.push({
+      route: "cloud",
+      baseUrl: config.fallbackUrl,
+      timeoutMs: options.timeoutMs,
+    });
+  }
+
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      rawBody: null,
+      error: NETWORK_UNREACHABLE_ERROR,
+      offline: true,
+      sessionRevoked: false,
+      networkError: true,
+      timedOut: false,
+      stale: false,
+      headers: null,
+      response: null,
+      usedRoute: null,
+      resolvedBaseUrl: null,
+    };
+  }
+
+  if (candidates.length === 2 && getActiveRoute() === "cloud") {
+    candidates.reverse();
+  }
+
+  let firstResult: ApiRequestResult<T> | null = null;
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    const result = await apiRequest<T>(candidate.baseUrl, path, {
+      ...options,
+      timeoutMs: candidate.timeoutMs ?? options.timeoutMs,
+    });
+    if (i === 0) {
+      firstResult = result;
+    }
+
+    if (!shouldFailOverResponse(result)) {
+      setActiveRoute(candidate.route);
+      return {
+        ...result,
+        usedRoute: candidate.route,
+        resolvedBaseUrl: candidate.baseUrl,
+      };
+    }
+
+    if (i === candidates.length - 1) {
+      return {
+        ...(firstResult ?? result),
+        usedRoute: null,
+        resolvedBaseUrl: null,
+      };
+    }
+  }
+
+  return {
+    ...(firstResult as ApiRequestResult<T>),
+    usedRoute: null,
+    resolvedBaseUrl: null,
   };
 }

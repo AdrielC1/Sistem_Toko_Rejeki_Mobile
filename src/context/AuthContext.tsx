@@ -12,30 +12,34 @@ import {
   bumpAuthEpoch,
   getAuthEpoch,
   registerSessionRevokedHandler,
+  resetActiveRouteForTest,
 } from "@/services/api/apiClient";
 import {
-  fetchCurrentUser,
-  fetchPublicSettings,
-  loginWithCredentials,
-  logoutSession,
+  fetchAuthenticatedSettings,
+  fetchCurrentUserWithFailover,
+  loginWithFailover,
+  logoutSessionWithFailover,
 } from "@/services/api/authApi";
 import {
   clearAuthSession,
   getCachedStoreSettings,
   getSessionToken,
-  getStoredServerUrl,
   getUserSnapshot,
-  setStoredServerUrl,
   setUserSnapshot,
 } from "@/services/storage/secureStorage";
 import {
+  getStoredServerConfig,
+  normalizeDualServerConfig,
   normalizeServerUrl,
+  setStoredServerConfig,
+  testDualServerConnection,
   testServerConnection,
 } from "@/services/storage/serverConfig";
 import type {
   AuthSessionUser,
   ConnectionTestResult,
   RoleCapabilities,
+  ServerUrlConfig,
   StoreSettings,
   UserRole,
 } from "@/types";
@@ -61,15 +65,25 @@ export interface AuthContextValue {
   authError: string | null;
   sessionNotice: string | null;
   serverUrl: string | null;
+  serverConfig: ServerUrlConfig;
   storeSettings: StoreSettings | null;
   roleCapabilities: RoleCapabilities;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  refreshStoreSettings: () => Promise<StoreSettings | null>;
   saveServerUrl: (
     rawUrl: string
   ) => { ok: true; url: string } | { ok: false; error: string };
+  saveServerConfig: (raw: {
+    primaryUrl?: string | null;
+    fallbackUrl?: string | null;
+  }) => { ok: true; config: ServerUrlConfig } | { ok: false; error: string };
   testServerUrl: (rawUrl: string) => Promise<ConnectionTestResult>;
+  testDualServerUrl: (raw: {
+    primaryUrl?: string | null;
+    fallbackUrl?: string | null;
+  }) => Promise<ConnectionTestResult>;
   clearAuthFeedback: () => void;
 }
 
@@ -86,6 +100,14 @@ export function computeRoleCapabilities(
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function resolveDisplayUrl(config: ServerUrlConfig): string | null {
+  return config.primaryUrl ?? config.fallbackUrl;
+}
+
+function hasAnyServerUrl(config: ServerUrlConfig): boolean {
+  return Boolean(config.primaryUrl || config.fallbackUrl);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [isHydrated, setIsHydrated] = useState<boolean>(false);
@@ -94,13 +116,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [retryAfterSeconds, setRetryAfterSeconds] = useState<number>(0);
   const [authError, setAuthError] = useState<string | null>(null);
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
-  const [serverUrl, setServerUrl] = useState<string | null>(null);
+  const [serverConfig, setServerConfig] = useState<ServerUrlConfig>(() =>
+    getStoredServerConfig()
+  );
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(
     null
   );
 
   const isMountedRef = useRef<boolean>(true);
-  const serverUrlRef = useRef<string | null>(null);
+  const serverConfigRef = useRef<ServerUrlConfig>(serverConfig);
   const storeSettingsRef = useRef<StoreSettings | null>(null);
   const loginInFlightRef = useRef<boolean>(false);
   const logoutInFlightRef = useRef<Promise<void> | null>(null);
@@ -142,40 +166,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [clearCountdownTimer]
   );
 
-  const refreshUserWithBaseUrl = useCallback(async (activeUrl: string) => {
-    const epoch = getAuthEpoch();
-    const res = await fetchCurrentUser(activeUrl);
-    if (!isMountedRef.current || epoch !== getAuthEpoch()) {
-      return;
-    }
-
-    if (res.status === 200 && res.user) {
-      const refreshedUser = res.user;
-      try {
-        await setUserSnapshot(refreshedUser, () => epoch === getAuthEpoch());
-      } catch {
-        // Preserve existing cached snapshot if native SecureStore write fails.
-      }
-      if (isMountedRef.current && epoch === getAuthEpoch()) {
-        setUser(refreshedUser);
-      }
-      return;
-    }
-
-    if (res.status === 401 || res.status === 403 || res.sessionRevoked) {
-      // apiRequest owns clearAuthSession() for 401 and /api/auth/me 403.
-      setUser(null);
-      setSessionNotice(SESSION_INVALID_NOTICE);
+  const applyServerConfigState = useCallback((config: ServerUrlConfig) => {
+    serverConfigRef.current = config;
+    if (isMountedRef.current) {
+      setServerConfig(config);
     }
   }, []);
 
+  const refreshStoreSettings = useCallback(
+    async (explicitConfig?: ServerUrlConfig): Promise<StoreSettings | null> => {
+      const config = explicitConfig ?? serverConfigRef.current;
+      if (!hasAnyServerUrl(config)) {
+        return null;
+      }
+      const epoch = getAuthEpoch();
+      try {
+        const settings = await fetchAuthenticatedSettings(config);
+        if (settings && isMountedRef.current && epoch === getAuthEpoch()) {
+          storeSettingsRef.current = settings;
+          setStoreSettings(settings);
+        }
+        return settings;
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  const refreshUserWithConfig = useCallback(
+    async (activeConfig: ServerUrlConfig) => {
+      const epoch = getAuthEpoch();
+      const res = await fetchCurrentUserWithFailover(activeConfig);
+      if (!isMountedRef.current || epoch !== getAuthEpoch()) {
+        return;
+      }
+
+      if (res.status === 200 && res.user) {
+        const refreshedUser = res.user;
+        try {
+          await setUserSnapshot(refreshedUser, () => epoch === getAuthEpoch());
+        } catch {
+          // Preserve existing cached snapshot if native SecureStore write fails.
+        }
+        if (isMountedRef.current && epoch === getAuthEpoch()) {
+          setUser(refreshedUser);
+        }
+        return;
+      }
+
+      if (res.status === 401 || res.status === 403 || res.sessionRevoked) {
+        // apiRequest owns clearAuthSession() for 401 and /api/auth/me 403.
+        setUser(null);
+        setSessionNotice(SESSION_INVALID_NOTICE);
+      }
+    },
+    []
+  );
+
   const refreshUser = useCallback(async () => {
-    const activeUrl = serverUrlRef.current ?? getStoredServerUrl();
-    if (!activeUrl) {
+    const activeConfig = serverConfigRef.current;
+    if (!hasAnyServerUrl(activeConfig)) {
       return;
     }
-    await refreshUserWithBaseUrl(activeUrl);
-  }, [refreshUserWithBaseUrl]);
+    await refreshUserWithConfig(activeConfig);
+  }, [refreshUserWithConfig]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -191,7 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function hydrate() {
       const mountEpoch = getAuthEpoch();
-      const initialServerUrl = getStoredServerUrl();
+      const initialConfig = getStoredServerConfig();
       const initialSettings = getCachedStoreSettings();
       const [snapshotUser, sessionToken] = await Promise.all([
         getUserSnapshot(),
@@ -202,9 +257,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      serverUrlRef.current = initialServerUrl;
+      serverConfigRef.current = initialConfig;
       storeSettingsRef.current = initialSettings;
-      setServerUrl(initialServerUrl);
+      setServerConfig(initialConfig);
       setStoreSettings(initialSettings);
 
       const hasValidOfflineSession = Boolean(snapshotUser && sessionToken);
@@ -225,7 +280,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (
         hasValidOfflineSession &&
-        initialServerUrl &&
+        hasAnyServerUrl(initialConfig) &&
         mountEpoch === getAuthEpoch()
       ) {
         try {
@@ -238,7 +293,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
           if (networkState.isConnected !== false) {
-            await refreshUserWithBaseUrl(initialServerUrl);
+            await refreshUserWithConfig(initialConfig);
+            if (
+              !cancelled &&
+              isMountedRef.current &&
+              mountEpoch === getAuthEpoch()
+            ) {
+              void refreshStoreSettings(initialConfig);
+            }
           }
         } catch {
           // Preserve cached offline snapshot if network probe fails
@@ -254,7 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearCountdownTimer();
       unsubscribe();
     };
-  }, [clearCountdownTimer, refreshUserWithBaseUrl]);
+  }, [clearCountdownTimer, refreshStoreSettings, refreshUserWithConfig]);
 
   const login = useCallback(
     async (username: string, password: string): Promise<boolean> => {
@@ -272,8 +334,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      const activeUrl = serverUrlRef.current ?? getStoredServerUrl();
-      if (!activeUrl) {
+      const activeConfig = hasAnyServerUrl(serverConfigRef.current)
+        ? serverConfigRef.current
+        : getStoredServerConfig();
+      if (!hasAnyServerUrl(activeConfig)) {
         setAuthError(MISSING_SERVER_URL_ERROR);
         setSessionNotice(null);
         return false;
@@ -286,8 +350,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       bumpAuthEpoch();
 
       try {
-        const result = await loginWithCredentials(
-          activeUrl,
+        const result = await loginWithFailover(
+          activeConfig,
           trimmedUsername,
           rawPassword
         );
@@ -304,16 +368,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuthError(null);
           setSessionNotice(null);
 
-          if (!storeSettingsRef.current) {
-            void fetchPublicSettings(activeUrl)
-              .then((settings) => {
-                if (settings && isMountedRef.current) {
-                  storeSettingsRef.current = settings;
-                  setStoreSettings(settings);
-                }
-              })
-              .catch(() => {});
-          }
+          void refreshStoreSettings(activeConfig);
           return true;
         }
 
@@ -336,7 +391,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [clearCountdownTimer, startRetryCountdown]
+    [clearCountdownTimer, refreshStoreSettings, startRetryCountdown]
   );
 
   const logout = useCallback(async (): Promise<void> => {
@@ -344,7 +399,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return logoutInFlightRef.current;
     }
 
-    const activeUrl = serverUrlRef.current ?? getStoredServerUrl() ?? "";
+    const activeConfig = serverConfigRef.current;
     bumpAuthEpoch();
     clearCountdownTimer();
     retryAfterRef.current = 0;
@@ -356,9 +411,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logoutPromise = (async () => {
       try {
-        await logoutSession(activeUrl);
+        await logoutSessionWithFailover(activeConfig);
       } finally {
         await clearAuthSession();
+        resetActiveRouteForTest();
         if (isMountedRef.current) {
           setUser(null);
           setAuthError(null);
@@ -373,6 +429,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return logoutPromise;
   }, [clearCountdownTimer]);
 
+  const saveServerConfig = useCallback(
+    (raw: {
+      primaryUrl?: string | null;
+      fallbackUrl?: string | null;
+    }):
+      | { ok: true; config: ServerUrlConfig }
+      | { ok: false; error: string } => {
+      const normalized = normalizeDualServerConfig(raw);
+      if (!normalized.ok) {
+        return normalized;
+      }
+      try {
+        const saved = setStoredServerConfig(normalized.config);
+        if (!saved) {
+          return { ok: false, error: SERVER_URL_STORAGE_ERROR };
+        }
+      } catch {
+        return { ok: false, error: SERVER_URL_STORAGE_ERROR };
+      }
+      resetActiveRouteForTest();
+      applyServerConfigState(normalized.config);
+      return normalized;
+    },
+    [applyServerConfigState]
+  );
+
   const saveServerUrl = useCallback(
     (
       rawUrl: string
@@ -381,19 +463,84 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!normalized.ok) {
         return normalized;
       }
+      const nextConfig: ServerUrlConfig = {
+        primaryUrl: normalized.url,
+        fallbackUrl: serverConfigRef.current.fallbackUrl,
+      };
       try {
-        const saved = setStoredServerUrl(normalized.url);
+        const saved = setStoredServerConfig(nextConfig);
         if (!saved) {
           return { ok: false, error: SERVER_URL_STORAGE_ERROR };
         }
       } catch {
         return { ok: false, error: SERVER_URL_STORAGE_ERROR };
       }
-      serverUrlRef.current = normalized.url;
-      setServerUrl(normalized.url);
-      return normalized;
+      resetActiveRouteForTest();
+      applyServerConfigState(nextConfig);
+      return { ok: true, url: normalized.url };
     },
-    []
+    [applyServerConfigState]
+  );
+
+  const testDualServerUrl = useCallback(
+    async (raw: {
+      primaryUrl?: string | null;
+      fallbackUrl?: string | null;
+    }): Promise<ConnectionTestResult> => {
+      const normalized = normalizeDualServerConfig(raw);
+      if (!normalized.ok) {
+        return {
+          ok: false,
+          latencyMs: 0,
+          error: normalized.error,
+        };
+      }
+
+      let result: ConnectionTestResult;
+      try {
+        result = await testDualServerConnection(normalized.config);
+      } catch {
+        return {
+          ok: false,
+          latencyMs: 0,
+          error: SERVER_URL_STORAGE_ERROR,
+        };
+      }
+
+      if (!result.ok) {
+        return result;
+      }
+
+      try {
+        const saved = setStoredServerConfig(normalized.config);
+        if (!saved) {
+          return {
+            ok: false,
+            latencyMs: result.latencyMs,
+            error: SERVER_URL_STORAGE_ERROR,
+          };
+        }
+      } catch {
+        return {
+          ok: false,
+          latencyMs: result.latencyMs,
+          error: SERVER_URL_STORAGE_ERROR,
+        };
+      }
+
+      resetActiveRouteForTest();
+      applyServerConfigState(normalized.config);
+
+      if (result.storeSettings) {
+        storeSettingsRef.current = result.storeSettings;
+        if (isMountedRef.current) {
+          setStoreSettings(result.storeSettings);
+        }
+      }
+
+      return result;
+    },
+    [applyServerConfigState]
   );
 
   const testServerUrl = useCallback(
@@ -414,8 +561,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const normalized = normalizeServerUrl(rawUrl);
       if (normalized.ok) {
+        const nextConfig: ServerUrlConfig = {
+          primaryUrl: normalized.url,
+          fallbackUrl: serverConfigRef.current.fallbackUrl,
+        };
         try {
-          const saved = setStoredServerUrl(normalized.url);
+          const saved = setStoredServerConfig(nextConfig);
           if (!saved) {
             return {
               ok: false,
@@ -430,10 +581,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             error: SERVER_URL_STORAGE_ERROR,
           };
         }
-        serverUrlRef.current = normalized.url;
-        if (isMountedRef.current) {
-          setServerUrl(normalized.url);
-        }
+        resetActiveRouteForTest();
+        applyServerConfigState(nextConfig);
       }
 
       if (result.storeSettings) {
@@ -445,7 +594,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return result;
     },
-    []
+    [applyServerConfigState]
   );
 
   const clearAuthFeedback = useCallback(() => {
@@ -458,6 +607,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => computeRoleCapabilities(role),
     [role]
   );
+  const serverUrl = resolveDisplayUrl(serverConfig);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -470,13 +620,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authError,
       sessionNotice,
       serverUrl,
+      serverConfig,
       storeSettings,
       roleCapabilities,
       login,
       logout,
       refreshUser,
+      refreshStoreSettings,
       saveServerUrl,
+      saveServerConfig,
       testServerUrl,
+      testDualServerUrl,
       clearAuthFeedback,
     }),
     [
@@ -489,13 +643,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authError,
       sessionNotice,
       serverUrl,
+      serverConfig,
       storeSettings,
       roleCapabilities,
       login,
       logout,
       refreshUser,
+      refreshStoreSettings,
       saveServerUrl,
+      saveServerConfig,
       testServerUrl,
+      testDualServerUrl,
       clearAuthFeedback,
     ]
   );

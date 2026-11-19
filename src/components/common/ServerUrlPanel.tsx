@@ -1,24 +1,36 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { ChevronDown, ChevronUp, Server, Wifi } from "lucide-react-native";
+import {
+  ChevronDown,
+  ChevronUp,
+  Cloud,
+  Server,
+  Wifi,
+} from "lucide-react-native";
 import {
   FeedbackBanner,
   InputField,
   SecondaryButton,
 } from "@/components/ui/VelocityPrimitives";
 import {
+  DEFAULT_CLOUD_SERVER_URL,
+  DEFAULT_PRIMARY_SERVER_URL,
+  DUAL_SERVER_UNREACHABLE_ERROR,
   SERVER_URL_HINTS,
-  SERVER_URL_INVALID_ERROR,
 } from "@/services/storage/serverConfig";
 import { FONT_FAMILY, TOKENS } from "@/theme/tokens";
-import type { ConnectionTestResult } from "@/types";
+import type { ConnectionTestResult, ServerUrlConfig } from "@/types";
 
 export interface ServerUrlPanelProps {
-  savedServerUrl: string | null;
-  onSaveUrl: (
-    rawUrl: string
-  ) => { ok: true; url: string } | { ok: false; error: string };
-  onTestConnection: (rawUrl: string) => Promise<ConnectionTestResult>;
+  savedServerConfig: ServerUrlConfig;
+  onSaveConfig: (raw: {
+    primaryUrl?: string | null;
+    fallbackUrl?: string | null;
+  }) => { ok: true; config: ServerUrlConfig } | { ok: false; error: string };
+  onTestDualConnection: (raw: {
+    primaryUrl?: string | null;
+    fallbackUrl?: string | null;
+  }) => Promise<ConnectionTestResult>;
   defaultExpanded?: boolean;
 }
 
@@ -29,18 +41,26 @@ interface PanelFeedback {
 }
 
 export function ServerUrlPanel({
-  savedServerUrl,
-  onSaveUrl,
-  onTestConnection,
+  savedServerConfig,
+  onSaveConfig,
+  onTestDualConnection,
   defaultExpanded,
 }: ServerUrlPanelProps) {
+  const hasAnySaved = Boolean(
+    savedServerConfig.primaryUrl || savedServerConfig.fallbackUrl
+  );
   const [expanded, setExpanded] = useState<boolean>(
-    defaultExpanded ?? !savedServerUrl
+    defaultExpanded ?? !hasAnySaved
   );
-  const [prevSavedUrl, setPrevSavedUrl] = useState<string | null>(
-    savedServerUrl
+  const [prevConfigKey, setPrevConfigKey] = useState<string>(
+    `${savedServerConfig.primaryUrl ?? ""}|${savedServerConfig.fallbackUrl ?? ""}`
   );
-  const [draftUrl, setDraftUrl] = useState<string>(savedServerUrl ?? "");
+  const [draftPrimaryUrl, setDraftPrimaryUrl] = useState<string>(
+    savedServerConfig.primaryUrl ?? ""
+  );
+  const [draftFallbackUrl, setDraftFallbackUrl] = useState<string>(
+    savedServerConfig.fallbackUrl ?? ""
+  );
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<PanelFeedback | null>(null);
   const isMountedRef = useRef<boolean>(true);
@@ -52,14 +72,15 @@ export function ServerUrlPanel({
     };
   }, []);
 
-  if (savedServerUrl !== prevSavedUrl) {
-    setPrevSavedUrl(savedServerUrl);
-    setDraftUrl(savedServerUrl ?? "");
-    if (
-      savedServerUrl &&
-      draftUrl.trim().length === 0 &&
-      defaultExpanded === undefined
-    ) {
+  const currentConfigKey = `${savedServerConfig.primaryUrl ?? ""}|${savedServerConfig.fallbackUrl ?? ""}`;
+  if (currentConfigKey !== prevConfigKey) {
+    const wasDraftEmpty =
+      draftPrimaryUrl.trim().length === 0 &&
+      draftFallbackUrl.trim().length === 0;
+    setPrevConfigKey(currentConfigKey);
+    setDraftPrimaryUrl(savedServerConfig.primaryUrl ?? "");
+    setDraftFallbackUrl(savedServerConfig.fallbackUrl ?? "");
+    if (hasAnySaved && wasDraftEmpty && defaultExpanded === undefined) {
       setExpanded(false);
     }
   }
@@ -68,11 +89,19 @@ export function ServerUrlPanel({
     setExpanded((prev) => !prev);
   };
 
-  const handleSelectHint = (hintUrl: string) => {
+  const handleSelectLanHint = (hintUrl: string) => {
     if (isTesting) {
       return;
     }
-    setDraftUrl(hintUrl);
+    setDraftPrimaryUrl(hintUrl);
+    setFeedback(null);
+  };
+
+  const handleSelectCloudHint = (hintUrl: string) => {
+    if (isTesting) {
+      return;
+    }
+    setDraftFallbackUrl(hintUrl);
     setFeedback(null);
   };
 
@@ -80,20 +109,31 @@ export function ServerUrlPanel({
     if (isTesting) {
       return;
     }
-    const result = onSaveUrl(draftUrl);
+    const result = onSaveConfig({
+      primaryUrl: draftPrimaryUrl,
+      fallbackUrl: draftFallbackUrl,
+    });
     if (!result.ok) {
       setFeedback({
         variant: "error",
-        message: result.error || SERVER_URL_INVALID_ERROR,
+        message: result.error,
       });
       return;
     }
 
-    setDraftUrl(result.url);
+    setDraftPrimaryUrl(result.config.primaryUrl ?? "");
+    setDraftFallbackUrl(result.config.fallbackUrl ?? "");
     setFeedback({
       variant: "success",
       title: "Alamat Server Disimpan",
-      message: result.url,
+      message: [
+        result.config.primaryUrl ? `LAN: ${result.config.primaryUrl}` : null,
+        result.config.fallbackUrl
+          ? `Cloud: ${result.config.fallbackUrl}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
     });
   };
 
@@ -105,29 +145,36 @@ export function ServerUrlPanel({
     setFeedback(null);
 
     try {
-      const result = await onTestConnection(draftUrl);
+      const result = await onTestDualConnection({
+        primaryUrl: draftPrimaryUrl,
+        fallbackUrl: draftFallbackUrl,
+      });
       if (!isMountedRef.current) {
         return;
       }
       if (!result.ok) {
         setFeedback({
           variant: "error",
-          message: result.error || SERVER_URL_INVALID_ERROR,
+          message: result.error || DUAL_SERVER_UNREACHABLE_ERROR,
         });
         return;
       }
 
       const storeLabel = result.storeSettings?.storeName ?? "Toko Rejeki";
+      const routeTitle =
+        result.routeUsed === "cloud"
+          ? "Server Cloud Terhubung (Cadangan)"
+          : "Server LAN Terhubung";
       setFeedback({
         variant: "success",
-        title: "Server Terhubung",
+        title: routeTitle,
         message: `${storeLabel} merespons (${result.latencyMs} ms).`,
       });
     } catch {
       if (isMountedRef.current) {
         setFeedback({
           variant: "error",
-          message: SERVER_URL_INVALID_ERROR,
+          message: DUAL_SERVER_UNREACHABLE_ERROR,
         });
       }
     } finally {
@@ -137,6 +184,14 @@ export function ServerUrlPanel({
     }
   };
 
+  const collapsedSummary = !hasAnySaved
+    ? "Belum diatur"
+    : savedServerConfig.primaryUrl && savedServerConfig.fallbackUrl
+      ? `${savedServerConfig.primaryUrl} · Cadangan Cloud aktif`
+      : (savedServerConfig.primaryUrl ??
+        savedServerConfig.fallbackUrl ??
+        "Belum diatur");
+
   return (
     <View style={styles.container}>
       <Pressable
@@ -144,7 +199,7 @@ export function ServerUrlPanel({
         onPress={handleToggle}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel="Ubah alamat server API"
+        accessibilityLabel="Ubah alamat server API LAN dan Cloud"
         style={({ pressed }) => [
           styles.triggerHeader,
           pressed && styles.triggerPressed,
@@ -158,7 +213,7 @@ export function ServerUrlPanel({
             ellipsizeMode="tail"
             style={styles.triggerUrlPreview}
           >
-            {savedServerUrl || "Belum diatur"}
+            {collapsedSummary}
           </Text>
         </View>
         {expanded ? (
@@ -172,20 +227,20 @@ export function ServerUrlPanel({
         <View style={styles.expandedBody}>
           <InputField
             testID="server-url-input"
-            label="URL Server Toko"
-            value={draftUrl}
+            label="URL Server LAN Utama"
+            value={draftPrimaryUrl}
             editable={!isTesting}
             onChangeText={(text) => {
               if (isTesting) {
                 return;
               }
-              setDraftUrl(text);
+              setDraftPrimaryUrl(text);
               if (feedback) {
                 setFeedback(null);
               }
             }}
-            placeholder={SERVER_URL_HINTS.lanExample}
-            helperText={`Contoh LAN: ${SERVER_URL_HINTS.lanExample} atau Emulator Android: ${SERVER_URL_HINTS.androidEmulator}`}
+            placeholder={DEFAULT_PRIMARY_SERVER_URL}
+            helperText={`Contoh LAN toko: ${DEFAULT_PRIMARY_SERVER_URL} atau Emulator: ${SERVER_URL_HINTS.androidEmulator}`}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
@@ -193,14 +248,38 @@ export function ServerUrlPanel({
             invalid={feedback?.variant === "error"}
           />
 
+          <InputField
+            testID="server-cloud-url-input"
+            label="URL Server Cloud Cadangan (Opsional)"
+            value={draftFallbackUrl}
+            editable={!isTesting}
+            onChangeText={(text) => {
+              if (isTesting) {
+                return;
+              }
+              setDraftFallbackUrl(text);
+              if (feedback) {
+                setFeedback(null);
+              }
+            }}
+            placeholder={DEFAULT_CLOUD_SERVER_URL}
+            helperText="Jika Wi-Fi LAN toko tidak terjangkau (timeout 2 detik), aplikasi otomatis failover ke URL Cloud ini."
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            monospace
+            leadingIcon={<Cloud size={15} color={TOKENS.colors.outline} />}
+            invalid={feedback?.variant === "error"}
+          />
+
           <View style={styles.hintRow}>
             <Pressable
               testID="server-hint-lan"
               disabled={isTesting}
-              onPress={() => handleSelectHint(SERVER_URL_HINTS.lanExample)}
+              onPress={() => handleSelectLanHint(DEFAULT_PRIMARY_SERVER_URL)}
               accessibilityRole="button"
               accessibilityState={{ disabled: isTesting }}
-              accessibilityLabel={`Gunakan contoh LAN ${SERVER_URL_HINTS.lanExample}`}
+              accessibilityLabel={`Isi LAN Utama ${DEFAULT_PRIMARY_SERVER_URL}`}
               style={({ pressed }) => [
                 styles.hintChip,
                 isTesting && styles.hintChipDisabled,
@@ -208,16 +287,16 @@ export function ServerUrlPanel({
               ]}
             >
               <Text style={styles.hintChipText}>
-                LAN ({SERVER_URL_HINTS.lanExample})
+                LAN ({DEFAULT_PRIMARY_SERVER_URL})
               </Text>
             </Pressable>
             <Pressable
               testID="server-hint-emulator"
               disabled={isTesting}
-              onPress={() => handleSelectHint(SERVER_URL_HINTS.androidEmulator)}
+              onPress={() => handleSelectLanHint(SERVER_URL_HINTS.androidEmulator)}
               accessibilityRole="button"
               accessibilityState={{ disabled: isTesting }}
-              accessibilityLabel={`Gunakan Emulator Android ${SERVER_URL_HINTS.androidEmulator}`}
+              accessibilityLabel={`Isi Emulator ${SERVER_URL_HINTS.androidEmulator}`}
               style={({ pressed }) => [
                 styles.hintChip,
                 isTesting && styles.hintChipDisabled,
@@ -226,6 +305,23 @@ export function ServerUrlPanel({
             >
               <Text style={styles.hintChipText}>
                 Emulator ({SERVER_URL_HINTS.androidEmulator})
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="server-hint-cloud"
+              disabled={isTesting}
+              onPress={() => handleSelectCloudHint(DEFAULT_CLOUD_SERVER_URL)}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isTesting }}
+              accessibilityLabel={`Isi Cloud Cadangan ${DEFAULT_CLOUD_SERVER_URL}`}
+              style={({ pressed }) => [
+                styles.hintChip,
+                isTesting && styles.hintChipDisabled,
+                pressed && !isTesting && styles.triggerPressed,
+              ]}
+            >
+              <Text style={styles.hintChipText}>
+                Cloud ({DEFAULT_CLOUD_SERVER_URL})
               </Text>
             </Pressable>
           </View>

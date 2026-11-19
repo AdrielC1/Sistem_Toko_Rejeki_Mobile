@@ -12,9 +12,16 @@ import { AuthProvider } from "@/context/AuthContext";
 import {
   getStoredServerUrl,
   setCachedStoreSettings,
+  setStoredServerConfigRaw,
   setStoredServerUrl,
 } from "@/services/storage/secureStorage";
-import { SERVER_URL_INVALID_ERROR } from "@/services/storage/serverConfig";
+import {
+  DEFAULT_CLOUD_SERVER_URL,
+  DEFAULT_PRIMARY_SERVER_URL,
+  DUAL_SERVER_EMPTY_ERROR,
+  DUAL_SERVER_UNREACHABLE_ERROR,
+  SERVER_URL_INVALID_ERROR,
+} from "@/services/storage/serverConfig";
 
 const BASE_URL = "http://192.168.1.10:3000";
 
@@ -273,7 +280,10 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     await unmount();
   });
 
-  it("auto-expands ServerUrlPanel when unconfigured, shows Server Terhubung on 200, and preserves saved URL on invalid/unreachable drafts", async () => {
+  it("auto-expands ServerUrlPanel when unconfigured, shows Server LAN Terhubung on 200, and preserves saved URL on invalid/unreachable drafts", async () => {
+    setStoredServerConfigRaw(
+      JSON.stringify({ primaryUrl: null, fallbackUrl: null })
+    );
     const first = await renderLogin();
 
     await waitFor(() => {
@@ -317,7 +327,7 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Server Terhubung")).toBeTruthy();
+      expect(screen.getByText("Server LAN Terhubung")).toBeTruthy();
     });
     expect(getStoredServerUrl()).toBe(BASE_URL);
     expect(screen.getByText("Toko Rejeki Utama")).toBeTruthy();
@@ -349,7 +359,16 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     expect(screen.getByText(SERVER_URL_INVALID_ERROR)).toBeTruthy();
     expect(getStoredServerUrl()).toBe(BASE_URL);
 
-    // Unreachable host via Test Connection
+    // Dual-empty draft shows DUAL_SERVER_EMPTY_ERROR
+    await fireEvent.changeText(screen.getByTestId("server-url-input"), " ");
+    await fireEvent.changeText(
+      screen.getByTestId("server-cloud-url-input"),
+      ""
+    );
+    await fireEvent.press(screen.getByTestId("server-save-button"));
+    expect(screen.getByText(DUAL_SERVER_EMPTY_ERROR)).toBeTruthy();
+
+    // Unreachable host via Test Connection preserves saved URL
     fetchMock.mockRejectedValueOnce(new Error("ECONNREFUSED"));
     await fireEvent.changeText(
       screen.getByTestId("server-url-input"),
@@ -357,7 +376,7 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     );
     await fireEvent.press(screen.getByTestId("server-test-button"));
     await waitFor(() => {
-      expect(screen.getByText(SERVER_URL_INVALID_ERROR)).toBeTruthy();
+      expect(screen.getByText(DUAL_SERVER_UNREACHABLE_ERROR)).toBeTruthy();
     });
     expect(getStoredServerUrl()).toBe(BASE_URL);
 
@@ -365,6 +384,9 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
   });
 
   it("WR-05: locks ServerUrlPanel input & hint chips during test and ignores unmount completion cleanly", async () => {
+    setStoredServerConfigRaw(
+      JSON.stringify({ primaryUrl: null, fallbackUrl: null })
+    );
     const fetchMock = globalThis.fetch as jest.Mock;
     let resolveTest!: (value: unknown) => void;
     fetchMock.mockReturnValueOnce(
@@ -390,11 +412,17 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
 
     expect(screen.getByTestId("server-url-input").props.editable).toBe(false);
     expect(
+      screen.getByTestId("server-cloud-url-input").props.editable
+    ).toBe(false);
+    expect(
       screen.getByTestId("server-hint-lan").props.accessibilityState.disabled
     ).toBe(true);
     expect(
       screen.getByTestId("server-hint-emulator").props.accessibilityState
         .disabled
+    ).toBe(true);
+    expect(
+      screen.getByTestId("server-hint-cloud").props.accessibilityState.disabled
     ).toBe(true);
 
     // Attempt mid-flight edit and hint chip tap -> draftUrl remains unchanged
@@ -417,6 +445,35 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
         }),
       });
     });
+  });
+
+  it("populates fresh install defaults (LAN + Cloud) and supports 3 quick-fill hint chips", async () => {
+    const view = await renderLogin();
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          `${DEFAULT_PRIMARY_SERVER_URL} · Cadangan Cloud aktif`
+        )
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(screen.getByTestId("server-url-panel-toggle"));
+    await fireEvent.changeText(screen.getByTestId("server-url-input"), "");
+    await fireEvent.changeText(
+      screen.getByTestId("server-cloud-url-input"),
+      ""
+    );
+
+    await fireEvent.press(screen.getByTestId("server-hint-lan"));
+    await fireEvent.press(screen.getByTestId("server-hint-cloud"));
+    expect(screen.getByTestId("server-url-input").props.value).toBe(
+      DEFAULT_PRIMARY_SERVER_URL
+    );
+    expect(screen.getByTestId("server-cloud-url-input").props.value).toBe(
+      DEFAULT_CLOUD_SERVER_URL
+    );
+
+    await view.unmount();
   });
 
   it("WR-06: falls back to TR monogram when storeLogo image fails to load", async () => {

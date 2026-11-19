@@ -3,8 +3,11 @@ import { StyleSheet, Text, View } from "react-native";
 import { SurfaceCard } from "@/components/ui/VelocityPrimitives";
 import { FONT_FAMILY, TOKENS } from "@/theme/tokens";
 
+export type EmptyStateIconVariant = "neutral" | "warning" | "primary";
+
 export interface EmptyStateCardProps {
   icon: React.ReactNode;
+  iconBadgeVariant?: EmptyStateIconVariant;
   title: string;
   description: string;
   action?: React.ReactNode;
@@ -13,6 +16,7 @@ export interface EmptyStateCardProps {
 
 export function EmptyStateCard({
   icon,
+  iconBadgeVariant = "neutral",
   title,
   description,
   action,
@@ -20,7 +24,15 @@ export function EmptyStateCard({
 }: EmptyStateCardProps) {
   return (
     <SurfaceCard testID={testID} style={styles.emptyCard}>
-      <View style={styles.emptyIconBadge}>{icon}</View>
+      <View
+        style={[
+          styles.emptyIconBadge,
+          iconBadgeVariant === "warning" && styles.badgeWarning,
+          iconBadgeVariant === "primary" && styles.badgePrimary,
+        ]}
+      >
+        {icon}
+      </View>
       <Text style={styles.emptyHeading}>{title}</Text>
       <Text style={styles.emptyBody}>{description}</Text>
       {action ? <View style={styles.actionWrap}>{action}</View> : null}
@@ -40,6 +52,12 @@ const styles = StyleSheet.create({
     backgroundColor: TOKENS.colors.surfaceContainer,
     alignItems: "center",
     justifyContent: "center",
+  },
+  badgeWarning: {
+    backgroundColor: TOKENS.colors.warningBg,
+  },
+  badgePrimary: {
+    backgroundColor: TOKENS.colors.primaryContainer,
   },
   emptyHeading: {
     fontFamily: FONT_FAMILY.heading,

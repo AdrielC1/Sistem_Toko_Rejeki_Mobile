@@ -35,11 +35,11 @@ export default function LoginScreen() {
     retryAfterSeconds,
     authError,
     sessionNotice,
-    serverUrl,
+    serverConfig,
     storeSettings,
     login,
-    saveServerUrl,
-    testServerUrl,
+    saveServerConfig,
+    testDualServerUrl,
     clearAuthFeedback,
   } = useAuth();
 
@@ -124,19 +124,19 @@ export default function LoginScreen() {
                 </Text>
               </View>
 
-              {!serverUrl ? (
+              {!serverConfig.primaryUrl && !serverConfig.fallbackUrl ? (
                 <FeedbackBanner
                   testID="server-unconfigured-banner"
                   variant="info"
                   title="Alamat Server Belum Terhubung"
-                  message="Buka panel Alamat Server API, masukkan URL server PC kasir (contoh: http://192.168.1.10:3000), lalu ketuk Tes Koneksi Server."
+                  message="Buka panel Alamat Server API, masukkan URL server LAN atau Cloud toko, lalu ketuk Tes Koneksi Server."
                 />
               ) : null}
 
               <ServerUrlPanel
-                savedServerUrl={serverUrl}
-                onSaveUrl={saveServerUrl}
-                onTestConnection={testServerUrl}
+                savedServerConfig={serverConfig}
+                onSaveConfig={saveServerConfig}
+                onTestDualConnection={testDualServerUrl}
               />
 
               {isThrottled ? (

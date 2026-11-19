@@ -140,4 +140,100 @@ describe("serverConfig", () => {
     expect(getStoredServerUrl()).toBe("http://192.168.1.10:3000");
     expect(getCachedStoreSettings()).toEqual({ storeName: "Toko Lama" });
   });
+
+  it("handles Dual-URL defaults, explicit null pair preservation, validation, and LAN->Cloud failover", async () => {
+    const {
+      DEFAULT_CLOUD_SERVER_URL,
+      DEFAULT_PRIMARY_SERVER_URL,
+      DUAL_SERVER_EMPTY_ERROR,
+      DUAL_SERVER_UNREACHABLE_ERROR,
+      getStoredServerConfig,
+      normalizeDualServerConfig,
+      setStoredServerConfig,
+      testDualServerConnection,
+    } = require("@/services/storage/serverConfig");
+    const {
+      KV_KEYS,
+      setStoredServerConfigRaw,
+    } = require("@/services/storage/secureStorage");
+
+    // 1. Fresh install returns defaults
+    expect(getStoredServerConfig()).toEqual({
+      primaryUrl: DEFAULT_PRIMARY_SERVER_URL,
+      fallbackUrl: DEFAULT_CLOUD_SERVER_URL,
+    });
+
+    // 2. Explicit { primaryUrl: null, fallbackUrl: null } is preserved (no default reinjection)
+    setStoredServerConfigRaw(
+      JSON.stringify({ primaryUrl: null, fallbackUrl: null })
+    );
+    expect(getStoredServerConfig()).toEqual({
+      primaryUrl: null,
+      fallbackUrl: null,
+    });
+    expect(KV_KEYS.SERVER_CONFIG).toBe("pos_server_config_v2");
+
+    // 3. Rejects dual-empty save
+    expect(
+      normalizeDualServerConfig({ primaryUrl: "  ", fallbackUrl: "" })
+    ).toEqual({
+      ok: false,
+      error: DUAL_SERVER_EMPTY_ERROR,
+    });
+
+    // 4. Valid dual save persists config + legacy SERVER_BASE_URL
+    const valid = normalizeDualServerConfig({
+      primaryUrl: "http://192.168.1.88:3000/",
+      fallbackUrl: "https://kasir.tokorejeki.my.id/",
+    });
+    expect(valid).toEqual({
+      ok: true,
+      config: {
+        primaryUrl: "http://192.168.1.88:3000",
+        fallbackUrl: "https://kasir.tokorejeki.my.id",
+      },
+    });
+    if (valid.ok) {
+      setStoredServerConfig(valid.config);
+    }
+    expect(getStoredServerConfig()).toEqual({
+      primaryUrl: "http://192.168.1.88:3000",
+      fallbackUrl: "https://kasir.tokorejeki.my.id",
+    });
+
+    // 5. LAN failure automatically falls back to Cloud in testDualServerConnection
+    const fetchMock = globalThis.fetch as jest.Mock;
+    fetchMock
+      .mockRejectedValueOnce(new Error("LAN timeout"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: {
+            storeName: "Toko Rejeki Cloud",
+            printerPaperWidth: 80,
+          },
+        }),
+      });
+
+    const cloudRes = await testDualServerConnection({
+      primaryUrl: "http://192.168.1.88:3000",
+      fallbackUrl: "https://kasir.tokorejeki.my.id",
+    });
+    expect(cloudRes.ok).toBe(true);
+    expect(cloudRes.routeUsed).toBe("cloud");
+    expect(cloudRes.lanAttemptError).toBeTruthy();
+
+    // 6. Both unreachable returns DUAL_SERVER_UNREACHABLE_ERROR
+    fetchMock
+      .mockRejectedValueOnce(new Error("LAN down"))
+      .mockRejectedValueOnce(new Error("Cloud down"));
+    const failBoth = await testDualServerConnection({
+      primaryUrl: "http://192.168.1.88:3000",
+      fallbackUrl: "https://kasir.tokorejeki.my.id",
+    });
+    expect(failBoth.ok).toBe(false);
+    expect(failBoth.error).toBe(DUAL_SERVER_UNREACHABLE_ERROR);
+  });
 });

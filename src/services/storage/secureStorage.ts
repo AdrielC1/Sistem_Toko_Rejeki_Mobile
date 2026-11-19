@@ -9,7 +9,9 @@ export const SECURE_KEYS = {
 
 export const KV_KEYS = {
   SERVER_BASE_URL: "pos_server_base_url",
+  SERVER_CONFIG: "pos_server_config_v2",
   STORE_SETTINGS: "pos_store_settings",
+  CLIENT_UUID: "pos_client_uuid",
 } as const;
 
 const VALID_ROLES: ReadonlySet<string> = new Set<UserRole>([
@@ -208,4 +210,51 @@ export function setCachedStoreSettings(settings: StoreSettings): boolean {
   } catch {
     return false;
   }
+}
+
+export function getStoredServerConfigRaw(): string | null {
+  try {
+    const raw = Storage.getItemSync(KV_KEYS.SERVER_CONFIG);
+    if (!raw) {
+      return null;
+    }
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredServerConfigRaw(json: string): boolean {
+  try {
+    Storage.setItemSync(KV_KEYS.SERVER_CONFIG, json);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearStoredServerConfig(): void {
+  try {
+    Storage.removeItemSync(KV_KEYS.SERVER_CONFIG);
+  } catch {
+    // Ignore removal error if store is uninitialized.
+  }
+}
+
+export function getOrCreateClientIdSync(generator: () => string): string {
+  try {
+    const existing = Storage.getItemSync(KV_KEYS.CLIENT_UUID);
+    if (typeof existing === "string" && existing.trim().length > 0) {
+      return existing.trim();
+    }
+    const created = generator().trim();
+    if (created.length > 0) {
+      Storage.setItemSync(KV_KEYS.CLIENT_UUID, created);
+      return created;
+    }
+  } catch {
+    // Fallback to generated ID if synchronous kv-store fails.
+  }
+  return generator();
 }

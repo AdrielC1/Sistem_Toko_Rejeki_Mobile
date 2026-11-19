@@ -423,4 +423,111 @@ describe("apiClient and authApi", () => {
       expect(res429.retryAfterSeconds).toBe(7);
     }
   });
+
+  it("handles Smart Auto LAN->Cloud failover safely and queries ?scope=mini / /api/health", async () => {
+    const {
+      apiRequestWithFailover,
+      getActiveRoute,
+      resetActiveRouteForTest,
+    } = require("@/services/api/apiClient");
+    const {
+      fetchClusterHealth,
+      probeLanHealthOnly,
+    } = require("@/services/api/healthApi");
+    const {
+      fetchDeltaCatalogSync,
+      fetchFullCatalogSync,
+      SyncTransportError,
+    } = require("@/services/api/syncApi");
+
+    resetActiveRouteForTest();
+    const fetchMock = globalThis.fetch as jest.Mock;
+    const config = {
+      primaryUrl: "http://192.168.1.100:3000",
+      fallbackUrl: "https://kasir.tokorejeki.my.id",
+    };
+
+    // 1. JSON 503 offline on LAN NEVER fails over to Cloud
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      headers: new Headers(),
+      json: async () => ({ success: false, offline: true, error: "DB down" }),
+    });
+    const res503 = await apiRequestWithFailover(config, "/api/health");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(res503.usedRoute).toBe("lan");
+    expect(res503.offline).toBe(true);
+
+    // 2. HTTP 401 on LAN NEVER fails over to Cloud (and clears auth once)
+    await setSessionToken("tok_lan.sig");
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      headers: new Headers(),
+      json: async () => ({ success: false, error: "Unauthorized" }),
+    });
+    const res401 = await apiRequestWithFailover(config, "/api/products");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(res401.usedRoute).toBe("lan");
+    expect(res401.sessionRevoked).toBe(true);
+
+    // 3. LAN network failure fails over cleanly to Cloud & flips activeRoute
+    fetchMock
+      .mockRejectedValueOnce(new Error("Network unreachable"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          status: "online",
+          db: "connected",
+          serverTime: "2026-11-19T10:00:00Z",
+          latencyMs: 42,
+        }),
+      });
+    const health = await fetchClusterHealth(config);
+    expect(health.serverReachable).toBe(true);
+    expect(health.dbOnline).toBe(true);
+    expect(health.usedRoute).toBe("cloud");
+    expect(getActiveRoute()).toBe("cloud");
+
+    // 4. Subsequent sync calls use Cloud first when activeRoute === "cloud" & pass ?scope=mini
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => ({
+        success: true,
+        data: {
+          products: [],
+          categories: [],
+          units: [],
+          serverTime: "2026-11-19T10:05:00Z",
+          totalProducts: 0,
+        },
+      }),
+    });
+    const fullRes = await fetchFullCatalogSync(config, "cli-123");
+    expect(fullRes.usedRoute).toBe("cloud");
+    const [fullUrl] = fetchMock.mock.calls.at(-1) as [string];
+    expect(fullUrl).toBe("https://kasir.tokorejeki.my.id/api/sync/full?scope=mini");
+
+    // 5. Delta sync throws SyncTransportError("DB_OFFLINE") on 503 offline
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      headers: new Headers(),
+      json: async () => ({ success: false, offline: true }),
+    });
+    await expect(
+      fetchDeltaCatalogSync(config, "2026-11-19T10:00:00Z")
+    ).rejects.toBeInstanceOf(SyncTransportError);
+
+    // 6. probeLanHealthOnly checks LAN directly without changing activeRoute on failure
+    fetchMock.mockRejectedValueOnce(new Error("LAN still unreachable"));
+    const probeFail = await probeLanHealthOnly("http://192.168.1.100:3000");
+    expect(probeFail.ok).toBe(false);
+    expect(getActiveRoute()).toBe("cloud");
+  });
 });

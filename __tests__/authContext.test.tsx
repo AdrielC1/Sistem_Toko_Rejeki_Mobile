@@ -43,6 +43,29 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
 }
 
+function installRoutedAuthFetch(
+  authQueue: Array<() => Promise<unknown>>,
+  settingsData: Record<string, unknown> = { storeName: "Toko Rejeki" }
+) {
+  const fetchMock = globalThis.fetch as jest.Mock;
+  fetchMock.mockImplementation((url: string) => {
+    if (url.endsWith("/api/settings")) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ success: true, data: settingsData }),
+      });
+    }
+    const next = authQueue.shift();
+    if (!next) {
+      return Promise.reject(new Error(`Unexpected fetch without queued mock: ${url}`));
+    }
+    return next();
+  });
+  return fetchMock;
+}
+
 describe("AuthContext and computeRoleCapabilities", () => {
   beforeEach(() => {
     resetTestStorage();
@@ -127,13 +150,34 @@ describe("AuthContext and computeRoleCapabilities", () => {
       fullName: "Budi Kasir Updated",
     };
 
-    const fetchMock = globalThis.fetch as jest.Mock;
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-      json: async () => ({ success: true, data: updatedKasir }),
-    });
+    const authQueue: Array<() => Promise<unknown>> = [
+      async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ success: true, data: updatedKasir }),
+      }),
+      async () => ({
+        ok: false,
+        status: 503,
+        headers: new Headers(),
+        json: async () => ({ success: false, error: "DB down" }),
+      }),
+      async () => Promise.reject(new Error("Network request failed")),
+      async () => ({
+        ok: false,
+        status: 403,
+        headers: new Headers(),
+        json: async () => ({ success: false, error: "Akun dinonaktifkan" }),
+      }),
+      async () => ({
+        ok: false,
+        status: 401,
+        headers: new Headers(),
+        json: async () => ({ success: false, error: "Unauthorized" }),
+      }),
+    ];
+    installRoutedAuthFetch(authQueue);
 
     const { result, unmount } = await renderHook(() => useAuth(), { wrapper });
 
@@ -143,12 +187,6 @@ describe("AuthContext and computeRoleCapabilities", () => {
     expect(await getUserSnapshot()).toEqual(updatedKasir);
 
     // 503 DB offline preserves snapshot
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 503,
-      headers: new Headers(),
-      json: async () => ({ success: false, error: "DB down" }),
-    });
     await act(async () => {
       await result.current.refreshUser();
     });
@@ -156,19 +194,12 @@ describe("AuthContext and computeRoleCapabilities", () => {
     expect(await getSessionToken()).toBe("tok_online.sig");
 
     // Network failure preserves snapshot
-    fetchMock.mockRejectedValueOnce(new Error("Network request failed"));
     await act(async () => {
       await result.current.refreshUser();
     });
     expect(result.current.user).toEqual(updatedKasir);
 
     // /api/auth/me 403 (inactive account) wipes session and sets notice
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 403,
-      headers: new Headers(),
-      json: async () => ({ success: false, error: "Akun dinonaktifkan" }),
-    });
     await act(async () => {
       await result.current.refreshUser();
     });
@@ -183,12 +214,6 @@ describe("AuthContext and computeRoleCapabilities", () => {
     // Seed again and verify /api/auth/me 401 revokes session
     await setSessionToken("tok_401.sig");
     await setUserSnapshot(OWNER_USER);
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 401,
-      headers: new Headers(),
-      json: async () => ({ success: false, error: "Unauthorized" }),
-    });
     await act(async () => {
       await result.current.refreshUser();
     });
@@ -338,11 +363,18 @@ describe("AuthContext and computeRoleCapabilities", () => {
     // Concurrent rapid double-tap login issues only ONE POST
     fetchMock.mockClear();
     let resolveLoginFetch!: (value: unknown) => void;
-    fetchMock.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveLoginFetch = resolve;
-      })
-    );
+    installRoutedAuthFetch([
+      () =>
+        new Promise((resolve) => {
+          resolveLoginFetch = resolve;
+        }),
+      async () => ({
+        ok: false,
+        status: 429,
+        headers: new Headers({ "Retry-After": "3" }),
+        json: async () => ({ success: false, retryAfter: 3 }),
+      }),
+    ]);
 
     let firstLogin!: Promise<boolean>;
     let secondLogin!: Promise<boolean>;
@@ -351,7 +383,10 @@ describe("AuthContext and computeRoleCapabilities", () => {
       secondLogin = result.current.login("owner1", "secret");
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const loginCalls = fetchMock.mock.calls.filter(([u]) =>
+      String(u).endsWith("/api/auth/login")
+    );
+    expect(loginCalls).toHaveLength(1);
     expect(result.current.isLoggingIn).toBe(true);
 
     resolveLoginFetch({
@@ -377,12 +412,6 @@ describe("AuthContext and computeRoleCapabilities", () => {
 
     // 429 throttle countdown ticks down 1s at a time and blocks bypass until 0
     jest.useFakeTimers();
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 429,
-      headers: new Headers({ "Retry-After": "3" }),
-      json: async () => ({ success: false, retryAfter: 3 }),
-    });
 
     await act(async () => {
       ok = await result.current.login("owner1", "bad");
@@ -786,6 +815,93 @@ describe("AuthContext and computeRoleCapabilities", () => {
     expect(result.current.serverUrl).toBe(BASE_URL);
 
     setSyncSpy.mockRestore();
+    await unmount();
+  });
+
+  it("supports Dual-URL saveServerConfig, testDualServerUrl failover, and authenticated refreshStoreSettings", async () => {
+    const { result, unmount } = await renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => {
+      expect(result.current.isHydrated).toBe(true);
+    });
+
+    // Rejects both blank
+    await act(async () => {
+      const invalid = result.current.saveServerConfig({
+        primaryUrl: " ",
+        fallbackUrl: "",
+      });
+      expect(invalid.ok).toBe(false);
+    });
+
+    // Saves valid Dual-URL config
+    await act(async () => {
+      const saved = result.current.saveServerConfig({
+        primaryUrl: "http://192.168.1.100:3000",
+        fallbackUrl: "https://kasir.tokorejeki.my.id",
+      });
+      expect(saved.ok).toBe(true);
+    });
+    expect(result.current.serverConfig).toEqual({
+      primaryUrl: "http://192.168.1.100:3000",
+      fallbackUrl: "https://kasir.tokorejeki.my.id",
+    });
+
+    // testDualServerUrl falls back to cloud when LAN fails
+    const fetchMock = globalThis.fetch as jest.Mock;
+    fetchMock
+      .mockRejectedValueOnce(new Error("LAN unreachable"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          success: true,
+          data: {
+            storeName: "Toko Rejeki Cloud",
+            printerPaperWidth: 80,
+            receiptSections: [
+              { id: "header", type: "header", enabled: true },
+            ],
+          },
+        }),
+      });
+
+    let dualTest!: Awaited<ReturnType<typeof result.current.testDualServerUrl>>;
+    await act(async () => {
+      dualTest = await result.current.testDualServerUrl({
+        primaryUrl: "http://192.168.1.100:3000",
+        fallbackUrl: "https://kasir.tokorejeki.my.id",
+      });
+    });
+    expect(dualTest.ok).toBe(true);
+    expect(dualTest.routeUsed).toBe("cloud");
+    expect(result.current.storeSettings?.storeName).toBe("Toko Rejeki Cloud");
+    expect(result.current.storeSettings?.printerPaperWidth).toBe(80);
+
+    // refreshStoreSettings fetches authenticated settings with active session
+    await setSessionToken("tok_owner.sig");
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => ({
+        success: true,
+        data: {
+          storeName: "Toko Rejeki Updated",
+          printerPaperWidth: 58,
+          previewReceiptBeforePrint: true,
+        },
+      }),
+    });
+    await act(async () => {
+      await result.current.refreshStoreSettings();
+    });
+    expect(result.current.storeSettings).toEqual({
+      storeName: "Toko Rejeki Updated",
+      printerPaperWidth: 58,
+      previewReceiptBeforePrint: true,
+    });
+
     await unmount();
   });
 });
