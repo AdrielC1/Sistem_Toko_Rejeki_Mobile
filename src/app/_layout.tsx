@@ -15,8 +15,10 @@ import {
   type Metrics,
 } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { initBluetoothEscPosDriver } from "@/services/print/bluetoothDriver";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
+initBluetoothEscPosDriver();
 
 const DEFAULT_SAFE_AREA_METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },

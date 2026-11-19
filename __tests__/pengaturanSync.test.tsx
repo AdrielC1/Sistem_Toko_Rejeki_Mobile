@@ -66,7 +66,9 @@ describe("SyncControlCard and ResetCacheConfirmModal", () => {
     );
 
     await waitFor(() => {
-      expect(getByText("42 produk · 5 kategori · 4 satuan")).toBeTruthy();
+      expect(getByText("42")).toBeTruthy();
+      expect(getByText("5")).toBeTruthy();
+      expect(getByText("4")).toBeTruthy();
       expect(getByText("FULL (boot)")).toBeTruthy();
     });
 

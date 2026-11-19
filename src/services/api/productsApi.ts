@@ -3,6 +3,7 @@ import {
   upsertLocalProduct,
 } from "@/db/catalogRepo";
 import { apiRequestWithFailover } from "@/services/api/apiClient";
+import { getActiveCatalogScopeQuery } from "@/store/catalogScopeStore";
 import { emitCatalogChanged } from "@/sync/catalogEvents";
 import {
   normalizeProductForRole,
@@ -56,7 +57,7 @@ export async function fetchServerProductDetail(
 ): Promise<{ ok: boolean; product: Product | null; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    `/api/products/${encodeURIComponent(id)}?scope=mini`,
+    `/api/products/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
     { method: "GET", timeoutMs: 8000 }
   );
 
@@ -83,7 +84,7 @@ export async function createServerProduct(
 ): Promise<{ ok: boolean; product: Product | null; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    `/api/products?scope=mini`,
+    `/api/products${getActiveCatalogScopeQuery("?")}`,
     {
       method: "POST",
       timeoutMs: 12000,
@@ -116,7 +117,7 @@ export async function updateServerProduct(
 ): Promise<{ ok: boolean; product: Product | null; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    `/api/products/${encodeURIComponent(id)}?scope=mini`,
+    `/api/products/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
     {
       method: "PUT",
       timeoutMs: 12000,
@@ -147,7 +148,7 @@ export async function softDeleteServerProduct(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<unknown>(
     config,
-    `/api/products/${encodeURIComponent(id)}?scope=mini`,
+    `/api/products/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
     {
       method: "DELETE",
       timeoutMs: 10000,
@@ -172,7 +173,7 @@ export async function fetchTrashedProducts(
 ): Promise<{ ok: boolean; products: Product[]; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>[]>(
     config,
-    `/api/products/trash?scope=mini`,
+    `/api/products/trash${getActiveCatalogScopeQuery("?")}`,
     { method: "GET", timeoutMs: 10000 }
   );
 
@@ -198,7 +199,7 @@ export async function restoreTrashedProduct(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    `/api/products/trash?scope=mini`,
+    `/api/products/trash${getActiveCatalogScopeQuery("?")}`,
     {
       method: "POST",
       timeoutMs: 10000,
@@ -226,7 +227,7 @@ export async function deleteTrashedProductPermanently(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<unknown>(
     config,
-    `/api/products/trash?scope=mini`,
+    `/api/products/trash${getActiveCatalogScopeQuery("?")}`,
     {
       method: "DELETE",
       timeoutMs: 10000,

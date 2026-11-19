@@ -16,7 +16,6 @@ import {
   DEFAULT_CLOUD_SERVER_URL,
   DEFAULT_PRIMARY_SERVER_URL,
   DUAL_SERVER_UNREACHABLE_ERROR,
-  SERVER_URL_HINTS,
 } from "@/services/storage/serverConfig";
 import { FONT_FAMILY, TOKENS } from "@/theme/tokens";
 import type { ConnectionTestResult, ServerUrlConfig } from "@/types";
@@ -87,22 +86,6 @@ export function ServerUrlPanel({
 
   const handleToggle = () => {
     setExpanded((prev) => !prev);
-  };
-
-  const handleSelectLanHint = (hintUrl: string) => {
-    if (isTesting) {
-      return;
-    }
-    setDraftPrimaryUrl(hintUrl);
-    setFeedback(null);
-  };
-
-  const handleSelectCloudHint = (hintUrl: string) => {
-    if (isTesting) {
-      return;
-    }
-    setDraftFallbackUrl(hintUrl);
-    setFeedback(null);
   };
 
   const handleSave = () => {
@@ -207,7 +190,7 @@ export function ServerUrlPanel({
       >
         <Server size={16} color={TOKENS.colors.primary} />
         <View style={styles.triggerTextGroup}>
-          <Text style={styles.triggerTitle}>Alamat Server API</Text>
+          <Text style={styles.triggerTitle}>Ubah Alamat Server API</Text>
           <Text
             numberOfLines={1}
             ellipsizeMode="tail"
@@ -240,7 +223,6 @@ export function ServerUrlPanel({
               }
             }}
             placeholder={DEFAULT_PRIMARY_SERVER_URL}
-            helperText={`Contoh LAN toko: ${DEFAULT_PRIMARY_SERVER_URL} atau Emulator: ${SERVER_URL_HINTS.androidEmulator}`}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
@@ -250,7 +232,7 @@ export function ServerUrlPanel({
 
           <InputField
             testID="server-cloud-url-input"
-            label="URL Server Cloud Cadangan (Opsional)"
+            label="URL Server Cloud Cadangan"
             value={draftFallbackUrl}
             editable={!isTesting}
             onChangeText={(text) => {
@@ -263,7 +245,7 @@ export function ServerUrlPanel({
               }
             }}
             placeholder={DEFAULT_CLOUD_SERVER_URL}
-            helperText="Jika Wi-Fi LAN toko tidak terjangkau (timeout 2 detik), aplikasi otomatis failover ke URL Cloud ini."
+            helperText="Otomatis digunakan apabila Wi-Fi LAN toko tidak terjangkau."
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
@@ -271,60 +253,6 @@ export function ServerUrlPanel({
             leadingIcon={<Cloud size={15} color={TOKENS.colors.outline} />}
             invalid={feedback?.variant === "error"}
           />
-
-          <View style={styles.hintRow}>
-            <Pressable
-              testID="server-hint-lan"
-              disabled={isTesting}
-              onPress={() => handleSelectLanHint(DEFAULT_PRIMARY_SERVER_URL)}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isTesting }}
-              accessibilityLabel={`Isi LAN Utama ${DEFAULT_PRIMARY_SERVER_URL}`}
-              style={({ pressed }) => [
-                styles.hintChip,
-                isTesting && styles.hintChipDisabled,
-                pressed && !isTesting && styles.triggerPressed,
-              ]}
-            >
-              <Text style={styles.hintChipText}>
-                LAN ({DEFAULT_PRIMARY_SERVER_URL})
-              </Text>
-            </Pressable>
-            <Pressable
-              testID="server-hint-emulator"
-              disabled={isTesting}
-              onPress={() => handleSelectLanHint(SERVER_URL_HINTS.androidEmulator)}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isTesting }}
-              accessibilityLabel={`Isi Emulator ${SERVER_URL_HINTS.androidEmulator}`}
-              style={({ pressed }) => [
-                styles.hintChip,
-                isTesting && styles.hintChipDisabled,
-                pressed && !isTesting && styles.triggerPressed,
-              ]}
-            >
-              <Text style={styles.hintChipText}>
-                Emulator ({SERVER_URL_HINTS.androidEmulator})
-              </Text>
-            </Pressable>
-            <Pressable
-              testID="server-hint-cloud"
-              disabled={isTesting}
-              onPress={() => handleSelectCloudHint(DEFAULT_CLOUD_SERVER_URL)}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isTesting }}
-              accessibilityLabel={`Isi Cloud Cadangan ${DEFAULT_CLOUD_SERVER_URL}`}
-              style={({ pressed }) => [
-                styles.hintChip,
-                isTesting && styles.hintChipDisabled,
-                pressed && !isTesting && styles.triggerPressed,
-              ]}
-            >
-              <Text style={styles.hintChipText}>
-                Cloud ({DEFAULT_CLOUD_SERVER_URL})
-              </Text>
-            </Pressable>
-          </View>
 
           <View style={styles.buttonRow}>
             <SecondaryButton
@@ -376,7 +304,7 @@ const styles = StyleSheet.create({
     minHeight: TOKENS.spacing.touchTarget,
     backgroundColor: TOKENS.colors.surfaceContainerLow,
     borderWidth: 1,
-    borderColor: TOKENS.colors.outline,
+    borderColor: TOKENS.colors.borderSubtle,
     borderRadius: TOKENS.radii.sm,
     paddingHorizontal: TOKENS.spacing.md,
     paddingVertical: TOKENS.spacing.sm,
@@ -408,31 +336,6 @@ const styles = StyleSheet.create({
     marginTop: TOKENS.spacing.md,
     gap: TOKENS.spacing.md,
   },
-  hintRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: TOKENS.spacing.sm,
-  },
-  hintChip: {
-    minHeight: TOKENS.spacing.touchTarget,
-    paddingHorizontal: TOKENS.spacing.md,
-    paddingVertical: TOKENS.spacing.sm,
-    borderRadius: TOKENS.radii.sm,
-    backgroundColor: TOKENS.colors.surfaceContainerLow,
-    borderWidth: 1,
-    borderColor: TOKENS.colors.borderSubtle,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  hintChipDisabled: {
-    opacity: 0.6,
-  },
-  hintChipText: {
-    fontFamily: FONT_FAMILY.mono,
-    fontSize: TOKENS.typography.label,
-    lineHeight: TOKENS.lineHeight.label,
-    color: TOKENS.colors.onSurfaceVariant,
-  },
   buttonRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -440,6 +343,6 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flexGrow: 1,
-    minWidth: 160,
+    minWidth: 150,
   },
 });

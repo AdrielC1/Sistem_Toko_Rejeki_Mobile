@@ -5,6 +5,7 @@ import {
   upsertLocalUnit,
 } from "@/db/catalogRepo";
 import { apiRequestWithFailover } from "@/services/api/apiClient";
+import { getActiveCatalogScopeQuery } from "@/store/catalogScopeStore";
 import { emitCatalogChanged } from "@/sync/catalogEvents";
 import {
   normalizeCategoryRecord,
@@ -14,8 +15,42 @@ import type { Category, ServerUrlConfig, Unit } from "@/types";
 
 export interface ConnectedProductSummary {
   id: string;
-  sku: string;
+  sku?: string;
+  barcode?: string;
   name: string;
+  sellingPrice?: number;
+}
+
+export interface TrashMasterRecord {
+  id: string;
+  name: string;
+  symbol?: string;
+  deletedAt: string;
+  daysLeft: number;
+}
+
+function normalizeTrashMasterRecord(
+  raw: Record<string, unknown>
+): TrashMasterRecord {
+  const deletedAt = String(
+    raw.deletedAt ?? raw.deleted_at ?? new Date().toISOString()
+  );
+  const rawDaysLeft = Number(raw.daysLeft ?? raw.days_left);
+  let daysLeft = Number.isFinite(rawDaysLeft) ? Math.max(0, Math.round(rawDaysLeft)) : 30;
+  if (!Number.isFinite(rawDaysLeft) && deletedAt) {
+    const ms = Date.parse(deletedAt);
+    if (Number.isFinite(ms)) {
+      const elapsedDays = Math.floor((Date.now() - ms) / (24 * 60 * 60 * 1000));
+      daysLeft = Math.max(0, 30 - elapsedDays);
+    }
+  }
+  return {
+    id: String(raw.id ?? ""),
+    name: String(raw.name ?? ""),
+    symbol: typeof raw.symbol === "string" ? raw.symbol : undefined,
+    deletedAt,
+    daysLeft,
+  };
 }
 
 export async function fetchCategoriesServer(config: ServerUrlConfig): Promise<{
@@ -25,7 +60,7 @@ export async function fetchCategoriesServer(config: ServerUrlConfig): Promise<{
 }> {
   const res = await apiRequestWithFailover<Record<string, unknown>[]>(
     config,
-    "/api/categories?scope=mini",
+    `/api/categories${getActiveCatalogScopeQuery("?")}`,
     { method: "GET", timeoutMs: 8000 }
   );
   if (!res.ok || !Array.isArray(res.data)) {
@@ -52,10 +87,14 @@ export async function fetchCategoryDetailServer(
 }> {
   const res = await apiRequestWithFailover<
     Record<string, unknown> & { products?: ConnectedProductSummary[] }
-  >(config, `/api/categories/${encodeURIComponent(id)}?scope=mini`, {
-    method: "GET",
-    timeoutMs: 8000,
-  });
+  >(
+    config,
+    `/api/categories/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
+    {
+      method: "GET",
+      timeoutMs: 8000,
+    }
+  );
   if (!res.ok || !res.data) {
     return {
       ok: false,
@@ -77,7 +116,7 @@ export async function createCategoryServer(
 ): Promise<{ ok: boolean; category: Category | null; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    "/api/categories?scope=mini",
+    `/api/categories${getActiveCatalogScopeQuery("?")}`,
     {
       method: "POST",
       timeoutMs: 10000,
@@ -104,7 +143,7 @@ export async function updateCategoryServer(
 ): Promise<{ ok: boolean; category: Category | null; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    `/api/categories/${encodeURIComponent(id)}?scope=mini`,
+    `/api/categories/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
     {
       method: "PUT",
       timeoutMs: 10000,
@@ -130,7 +169,7 @@ export async function softDeleteCategoryServer(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<unknown>(
     config,
-    `/api/categories/${encodeURIComponent(id)}?scope=mini`,
+    `/api/categories/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
     { method: "DELETE", timeoutMs: 10000 }
   );
   if (!res.ok) {
@@ -151,7 +190,7 @@ export async function migrateCategoryProductsServer(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<unknown>(
     config,
-    `/api/categories/${encodeURIComponent(fromId)}/migrate?scope=mini`,
+    `/api/categories/${encodeURIComponent(fromId)}/migrate${getActiveCatalogScopeQuery("?")}`,
     {
       method: "POST",
       timeoutMs: 10000,
@@ -170,10 +209,10 @@ export async function migrateCategoryProductsServer(
 
 export async function fetchTrashedCategoriesServer(
   config: ServerUrlConfig
-): Promise<{ ok: boolean; items: Category[]; error?: string }> {
+): Promise<{ ok: boolean; items: TrashMasterRecord[]; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>[]>(
     config,
-    "/api/categories/trash?scope=mini",
+    `/api/categories/trash${getActiveCatalogScopeQuery("?")}`,
     { method: "GET", timeoutMs: 8000 }
   );
   if (!res.ok || !Array.isArray(res.data)) {
@@ -183,7 +222,7 @@ export async function fetchTrashedCategoriesServer(
       error: res.error ?? "Gagal memuat tong sampah kategori.",
     };
   }
-  return { ok: true, items: res.data.map(normalizeCategoryRecord) };
+  return { ok: true, items: res.data.map(normalizeTrashMasterRecord) };
 }
 
 export async function restoreTrashedCategoryServer(
@@ -192,7 +231,7 @@ export async function restoreTrashedCategoryServer(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    "/api/categories/trash?scope=mini",
+    `/api/categories/trash${getActiveCatalogScopeQuery("?")}`,
     {
       method: "POST",
       timeoutMs: 10000,
@@ -215,7 +254,7 @@ export async function purgeTrashedCategoryServer(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<unknown>(
     config,
-    "/api/categories/trash?scope=mini",
+    `/api/categories/trash${getActiveCatalogScopeQuery("?")}`,
     {
       method: "DELETE",
       timeoutMs: 10000,
@@ -235,7 +274,7 @@ export async function fetchUnitsServer(config: ServerUrlConfig): Promise<{
 }> {
   const res = await apiRequestWithFailover<Record<string, unknown>[]>(
     config,
-    "/api/units?scope=mini",
+    `/api/units${getActiveCatalogScopeQuery("?")}`,
     { method: "GET", timeoutMs: 8000 }
   );
   if (!res.ok || !Array.isArray(res.data)) {
@@ -259,10 +298,14 @@ export async function fetchUnitDetailServer(
 }> {
   const res = await apiRequestWithFailover<
     Record<string, unknown> & { products?: ConnectedProductSummary[] }
-  >(config, `/api/units/${encodeURIComponent(id)}?scope=mini`, {
-    method: "GET",
-    timeoutMs: 8000,
-  });
+  >(
+    config,
+    `/api/units/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
+    {
+      method: "GET",
+      timeoutMs: 8000,
+    }
+  );
   if (!res.ok || !res.data) {
     return {
       ok: false,
@@ -284,7 +327,7 @@ export async function createUnitServer(
 ): Promise<{ ok: boolean; unit: Unit | null; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    "/api/units?scope=mini",
+    `/api/units${getActiveCatalogScopeQuery("?")}`,
     {
       method: "POST",
       timeoutMs: 10000,
@@ -311,7 +354,7 @@ export async function updateUnitServer(
 ): Promise<{ ok: boolean; unit: Unit | null; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    `/api/units/${encodeURIComponent(id)}?scope=mini`,
+    `/api/units/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
     {
       method: "PUT",
       timeoutMs: 10000,
@@ -337,7 +380,7 @@ export async function softDeleteUnitServer(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<unknown>(
     config,
-    `/api/units/${encodeURIComponent(id)}?scope=mini`,
+    `/api/units/${encodeURIComponent(id)}${getActiveCatalogScopeQuery("?")}`,
     { method: "DELETE", timeoutMs: 10000 }
   );
   if (!res.ok) {
@@ -358,7 +401,7 @@ export async function migrateUnitProductsServer(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<unknown>(
     config,
-    `/api/units/${encodeURIComponent(fromId)}/migrate?scope=mini`,
+    `/api/units/${encodeURIComponent(fromId)}/migrate${getActiveCatalogScopeQuery("?")}`,
     {
       method: "POST",
       timeoutMs: 10000,
@@ -377,10 +420,10 @@ export async function migrateUnitProductsServer(
 
 export async function fetchTrashedUnitsServer(
   config: ServerUrlConfig
-): Promise<{ ok: boolean; items: Unit[]; error?: string }> {
+): Promise<{ ok: boolean; items: TrashMasterRecord[]; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>[]>(
     config,
-    "/api/units/trash?scope=mini",
+    `/api/units/trash${getActiveCatalogScopeQuery("?")}`,
     { method: "GET", timeoutMs: 8000 }
   );
   if (!res.ok || !Array.isArray(res.data)) {
@@ -390,7 +433,7 @@ export async function fetchTrashedUnitsServer(
       error: res.error ?? "Gagal memuat tong sampah satuan.",
     };
   }
-  return { ok: true, items: res.data.map(normalizeUnitRecord) };
+  return { ok: true, items: res.data.map(normalizeTrashMasterRecord) };
 }
 
 export async function restoreTrashedUnitServer(
@@ -399,7 +442,7 @@ export async function restoreTrashedUnitServer(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    "/api/units/trash?scope=mini",
+    `/api/units/trash${getActiveCatalogScopeQuery("?")}`,
     {
       method: "POST",
       timeoutMs: 10000,
@@ -422,7 +465,7 @@ export async function purgeTrashedUnitServer(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await apiRequestWithFailover<unknown>(
     config,
-    "/api/units/trash?scope=mini",
+    `/api/units/trash${getActiveCatalogScopeQuery("?")}`,
     {
       method: "DELETE",
       timeoutMs: 10000,

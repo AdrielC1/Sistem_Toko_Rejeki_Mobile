@@ -1,6 +1,5 @@
 import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, Info, Server, Smartphone } from "lucide-react-native";
@@ -17,7 +16,6 @@ export default function PengaturanAboutScreen() {
   const { healthState, activeRoute, latencyMs } = useSystemStatus();
   const { catalogCounts } = useSyncEngine();
 
-  const appVersion = Constants.expoConfig?.version ?? "1.0.0";
   const storeName = storeSettings?.storeName?.trim() || "Toko Rejeki";
   const storeLogo = storeSettings?.storeLogo?.trim() || "";
 
@@ -68,7 +66,9 @@ export default function PengaturanAboutScreen() {
               {`Telp: ${storeSettings.storePhone}`}
             </Text>
           ) : null}
-          {role ? <RoleBadge role={role} /> : null}
+          {role ? (
+            <RoleBadge role={role} style={styles.centerRoleBadge} />
+          ) : null}
           {user ? (
             <Text style={styles.operatorText}>
               {`Masuk sebagai ${user.fullName} (@${user.username})`}
@@ -87,12 +87,6 @@ export default function PengaturanAboutScreen() {
             <Text style={styles.kvValue}>Apps Toko Rejeki Mobile POS</Text>
           </View>
           <View style={styles.kvRow}>
-            <Text style={styles.kvLabel}>Versi Rilis</Text>
-            <Text testID="about-app-version" style={styles.kvMono}>
-              {`v${appVersion}`}
-            </Text>
-          </View>
-          <View style={styles.kvRow}>
             <Text style={styles.kvLabel}>Arsitektur</Text>
             <Text style={styles.kvValue}>
               Expo SDK 58 · Router · TypeScript
@@ -100,7 +94,7 @@ export default function PengaturanAboutScreen() {
           </View>
           <View style={styles.kvRow}>
             <Text style={styles.kvLabel}>Pengembang</Text>
-            <Text style={styles.kvValue}>Tim Pengembang Toko Rejeki</Text>
+            <Text style={styles.kvValue}>Adriel Christofer Widya</Text>
           </View>
         </SurfaceCard>
 
@@ -224,6 +218,11 @@ const styles = StyleSheet.create({
     fontSize: TOKENS.typography.label,
     lineHeight: TOKENS.lineHeight.label,
     color: TOKENS.colors.onSurface,
+    textAlign: "center",
+    marginTop: TOKENS.spacing.xs,
+  },
+  centerRoleBadge: {
+    alignSelf: "center",
     marginTop: TOKENS.spacing.xs,
   },
   card: {

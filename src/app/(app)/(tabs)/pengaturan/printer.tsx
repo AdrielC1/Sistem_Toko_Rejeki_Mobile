@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -11,16 +11,16 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Bluetooth,
+  Check,
   ChevronLeft,
+  Info,
   Printer,
   Save,
-  Search,
   Server,
   Smartphone,
 } from "lucide-react-native";
 import {
   FeedbackBanner,
-  InputField,
   PrimaryButton,
   SecondaryButton,
   SurfaceCard,
@@ -29,15 +29,15 @@ import { useAuth } from "@/context/AuthContext";
 import { useSystemStatus } from "@/context/SystemStatusContext";
 import { buildCompletedOrderPayload } from "@/domain/pricing";
 import {
-  fetchServerPrinters,
   triggerServerTestPrint,
   updateStoreSettings,
-  type ServerPrinterInfo,
 } from "@/services/api/settingsApi";
 import {
   executeReceiptPrint,
+  isBluetoothEscPosSupported,
   scanPairedBluetoothPrinters,
 } from "@/services/print/printerService";
+import { setCachedStoreSettings } from "@/services/storage/secureStorage";
 import {
   usePrinterPrefsStore,
   type PairedBluetoothPrinter,
@@ -54,19 +54,19 @@ const MODE_OPTIONS: {
   {
     id: "server",
     title: "Printer Server Toko",
-    desc: "Cetak via API /api/print ke printer USB/LAN komputer kasir",
+    desc: "Cetak via API /api/print ke printer USB/LAN komputer kasir utama",
     icon: "server",
   },
   {
     id: "bluetooth",
     title: "Thermal Bluetooth ESC/POS",
-    desc: "Cetak langsung offline ke printer thermal Bluetooth 58mm/80mm",
+    desc: "Cetak langsung ke printer thermal Bluetooth 58mm/80mm (memerlukan build APK / Dev Client)",
     icon: "bluetooth",
   },
   {
     id: "system",
     title: "Cetak Sistem HP / PDF",
-    desc: "Cetak melalui dialog print bawaan Android / iOS (AirPrint / Mopria)",
+    desc: "Cetak melalui dialog print bawaan Android / iOS (AirPrint / Mopria / PDF)",
     icon: "system",
   },
 ];
@@ -91,111 +91,120 @@ export default function PengaturanPrinterScreen() {
     (s) => s.setBluetoothPaperWidth
   );
 
-  // Local BT draft state
-  const [scannedBtDevices, setScannedBtDevices] = useState<
-    PairedBluetoothPrinter[]
-  >([]);
-  const [manualBtName, setManualBtName] = useState<string>(
-    bluetoothDevice?.name ?? ""
-  );
-  const [manualBtMac, setManualBtMac] = useState<string>(
-    bluetoothDevice?.address ?? ""
-  );
-  const [isTestingDevice, setIsTestingDevice] = useState<boolean>(false);
-
-  // Owner Server Printer settings state
-  const [serverPrinters, setServerPrinters] = useState<ServerPrinterInfo[]>([]);
-  const [selectedServerPrinter, setSelectedServerPrinter] = useState<string>(
-    storeSettings?.printerName ?? ""
-  );
-  const [selectedPrinterType, setSelectedPrinterType] = useState<
-    "usb" | "network"
-  >(storeSettings?.printerType ?? "usb");
-  const [serverPaperWidth, setServerPaperWidth] = useState<number>(
-    storeSettings?.printerPaperWidth ?? 58
+  const [draftMode, setDraftMode] = useState<PrinterDeviceMode>(printerMode);
+  const [draftPaperWidth, setDraftPaperWidth] = useState<58 | 80>(
+    bluetoothPaperWidth
   );
   const [previewBeforePrint, setPreviewBeforePrint] = useState<boolean>(
     storeSettings?.previewReceiptBeforePrint ?? true
   );
-  const [receiptFooterNote, setReceiptFooterNote] = useState<string>(
-    storeSettings?.receiptFooterNote ?? ""
+  const [pairedDevices, setPairedDevices] = useState<PairedBluetoothPrinter[]>(
+    []
   );
-  const [isSavingServer, setIsSavingServer] = useState<boolean>(false);
+  const [isScanningBt, setIsScanningBt] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isTestingDevice, setIsTestingDevice] = useState<boolean>(false);
   const [banner, setBanner] = useState<{
-    variant: "success" | "warning" | "error";
+    variant: "success" | "warning" | "error" | "info";
     message: string;
   } | null>(null);
 
+  const btDriverReady = isBluetoothEscPosSupported();
+
   const canWriteOnline =
+    roleCapabilities.canManageStore &&
     isDeviceConnected &&
     dbOnline &&
     healthState !== "offline" &&
     healthState !== "read_only";
 
-  useEffect(() => {
-    if (!roleCapabilities.canManageStore || !isDeviceConnected) {
-      return;
-    }
-    let active = true;
-    void fetchServerPrinters(serverConfig)
-      .then((res) => {
-        if (active && res.ok) {
-          setServerPrinters(res.printers);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [isDeviceConnected, roleCapabilities.canManageStore, serverConfig]);
-
-  const handleScanBt = async () => {
+  const handleSelectMode = (nextMode: PrinterDeviceMode) => {
+    setDraftMode(nextMode);
+    setMode(nextMode);
     setBanner(null);
-    const res = await scanPairedBluetoothPrinters();
-    if (res.ok) {
-      setScannedBtDevices(res.devices);
-      if (res.devices.length === 0) {
+  };
+
+  const handleSelectPaperWidth = (nextWidth: 58 | 80) => {
+    setDraftPaperWidth(nextWidth);
+    setBluetoothPaperWidth(nextWidth);
+    setBanner(null);
+  };
+
+  const handleScanBluetoothDevices = async () => {
+    setIsScanningBt(true);
+    setBanner(null);
+    try {
+      const res = await scanPairedBluetoothPrinters();
+      if (!res.ok) {
         setBanner({
           variant: "warning",
           message:
-            "Tidak ada printer Bluetooth terpasang. Pastikan printer sudah di-pair di Pengaturan Bluetooth HP.",
+            res.error ??
+            "Gagal memindai printer Bluetooth yang sudah dipasangkan.",
+        });
+        return;
+      }
+      setPairedDevices(res.devices);
+      if (res.devices.length === 0) {
+        setBanner({
+          variant: "info",
+          message:
+            "Tidak ditemukan perangkat Bluetooth terpasang (Paired). Pasangkan printer di Pengaturan Bluetooth HP terlebih dahulu.",
         });
       }
-    } else {
-      setBanner({
-        variant: "warning",
-        message: res.error ?? "Pemindaian Bluetooth tidak tersedia.",
-      });
+    } finally {
+      setIsScanningBt(false);
     }
   };
 
-  const handleSaveManualBt = () => {
-    if (!manualBtMac.trim()) {
-      setBanner({
-        variant: "error",
-        message: "Alamat MAC / ID perangkat Bluetooth wajib diisi.",
-      });
+  const handleSavePrinterSettings = async () => {
+    if (isSaving) {
       return;
     }
-    setBluetoothDevice({
-      name: manualBtName.trim() || "Printer Thermal BT",
-      address: manualBtMac.trim(),
-    });
-    setBanner({
-      variant: "success",
-      message: "Printer Bluetooth perangkat ini berhasil disimpan.",
-    });
+    setIsSaving(true);
+    setBanner(null);
+    try {
+      setMode(draftMode);
+      setBluetoothPaperWidth(draftPaperWidth);
+      const nextLocalSettings = {
+        ...(storeSettings ?? { storeName: "Toko Rejeki" }),
+        printerPaperWidth: draftPaperWidth,
+        previewReceiptBeforePrint: previewBeforePrint,
+      };
+      setCachedStoreSettings(nextLocalSettings);
+
+      if (canWriteOnline) {
+        const res = await updateStoreSettings(serverConfig, {
+          printerPaperWidth: draftPaperWidth,
+          previewReceiptBeforePrint: previewBeforePrint,
+        });
+        if (res.ok) {
+          await refreshStoreSettings();
+        }
+      } else {
+        await refreshStoreSettings();
+      }
+
+      setBanner({
+        variant: "success",
+        message:
+          "Pengaturan metode cetak, ukuran kertas, & pratinjau struk berhasil disimpan.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDeviceTestPrint = async () => {
     setIsTestingDevice(true);
     setBanner(null);
     try {
-      if (printerMode === "server") {
+      const activeMode = draftMode;
+      if (activeMode === "server") {
         const res = await triggerServerTestPrint(serverConfig, {
-          printerName: selectedServerPrinter || storeSettings?.printerName,
-          printerType: selectedPrinterType,
-          paperWidth: serverPaperWidth,
+          printerName: storeSettings?.printerName,
+          printerType: storeSettings?.printerType ?? "usb",
+          paperWidth: draftPaperWidth,
         });
         setBanner({
           variant: res.ok ? "success" : "error",
@@ -223,18 +232,22 @@ export default function PengaturanPrinterScreen() {
         ],
         discount: 0,
         cashierName: user?.fullName ?? "Kasir",
-        storeSettings: storeSettings ?? null,
+        storeSettings: storeSettings
+          ? { ...storeSettings, printerPaperWidth: draftPaperWidth }
+          : { storeName: "Toko Rejeki", printerPaperWidth: draftPaperWidth },
         orderNumber: "TEST-PRINT",
       });
 
       const res = await executeReceiptPrint({
-        mode: printerMode,
+        mode: activeMode,
         order: sampleOrder,
         copies: 1,
         serverConfig,
-        storeSettings: storeSettings ?? null,
+        storeSettings: storeSettings
+          ? { ...storeSettings, printerPaperWidth: draftPaperWidth }
+          : { storeName: "Toko Rejeki", printerPaperWidth: draftPaperWidth },
         bluetoothDevice,
-        bluetoothPaperWidth,
+        bluetoothPaperWidth: draftPaperWidth,
       });
 
       setBanner({
@@ -245,37 +258,6 @@ export default function PengaturanPrinterScreen() {
       });
     } finally {
       setIsTestingDevice(false);
-    }
-  };
-
-  const handleSaveServerSettings = async () => {
-    if (isSavingServer || !canWriteOnline) {
-      return;
-    }
-    setIsSavingServer(true);
-    setBanner(null);
-    try {
-      const res = await updateStoreSettings(serverConfig, {
-        printerName: selectedServerPrinter.trim(),
-        printerType: selectedPrinterType,
-        printerPaperWidth: serverPaperWidth,
-        previewReceiptBeforePrint: previewBeforePrint,
-        receiptFooterNote: receiptFooterNote.trim(),
-      });
-      if (res.ok) {
-        await refreshStoreSettings();
-        setBanner({
-          variant: "success",
-          message: "Pengaturan printer & struk server berhasil disimpan.",
-        });
-      } else {
-        setBanner({
-          variant: "error",
-          message: res.error ?? "Gagal menyimpan pengaturan printer server.",
-        });
-      }
-    } finally {
-      setIsSavingServer(false);
     }
   };
 
@@ -295,6 +277,7 @@ export default function PengaturanPrinterScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         {banner ? (
           <FeedbackBanner
@@ -306,24 +289,34 @@ export default function PengaturanPrinterScreen() {
 
         <SurfaceCard testID="printer-device-mode-card" style={styles.card}>
           <Text style={styles.sectionHeading}>Metode Cetak Perangkat Ini</Text>
+          <Text style={styles.sectionSub}>
+            Pilih jalur pencetakan struk ketika menekan tombol Cetak Struk di
+            layar Kasir pada perangkat ini.
+          </Text>
+
           {MODE_OPTIONS.map((opt) => {
-            const selected = printerMode === opt.id;
+            const selected = draftMode === opt.id;
             return (
               <Pressable
                 key={opt.id}
                 testID={`printer-mode-${opt.id}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
-                onPress={() => setMode(opt.id)}
+                onPress={() => handleSelectMode(opt.id)}
                 style={[styles.modeCard, selected && styles.modeCardSelected]}
               >
-                <View style={styles.modeIconWrap}>
+                <View
+                  style={[
+                    styles.modeIconWrap,
+                    selected && styles.modeIconWrapSelected,
+                  ]}
+                >
                   {opt.icon === "server" ? (
                     <Server
                       size={18}
                       color={
                         selected
-                          ? TOKENS.colors.onPrimaryFixed
+                          ? TOKENS.colors.onPrimary
                           : TOKENS.colors.onSurfaceVariant
                       }
                     />
@@ -332,7 +325,7 @@ export default function PengaturanPrinterScreen() {
                       size={18}
                       color={
                         selected
-                          ? TOKENS.colors.onPrimaryFixed
+                          ? TOKENS.colors.onPrimary
                           : TOKENS.colors.onSurfaceVariant
                       }
                     />
@@ -341,7 +334,7 @@ export default function PengaturanPrinterScreen() {
                       size={18}
                       color={
                         selected
-                          ? TOKENS.colors.onPrimaryFixed
+                          ? TOKENS.colors.onPrimary
                           : TOKENS.colors.onSurfaceVariant
                       }
                     />
@@ -358,197 +351,185 @@ export default function PengaturanPrinterScreen() {
                   </Text>
                   <Text style={styles.modeDesc}>{opt.desc}</Text>
                 </View>
+                {selected ? (
+                  <View style={styles.selectedCheckCircle}>
+                    <Check size={14} color={TOKENS.colors.onPrimary} />
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
 
-          {printerMode === "bluetooth" ? (
-            <View style={styles.btPanel}>
-              <Text style={styles.fieldLabel}>
-                Lebar Kertas Thermal Bluetooth
+          <View style={styles.paperWidthBox}>
+            <View style={styles.paperWidthHeader}>
+              <Text style={styles.switchLabel}>Ukuran Kertas Struk Lokal</Text>
+              <Text style={styles.switchSub}>
+                Dapat diubah sewaktu-waktu sesuai ukuran roll kertas printer yang
+                sedang digunakan (58mm atau 80mm).
               </Text>
-              <View style={styles.chipRow}>
-                {([58, 80] as const).map((w) => (
+            </View>
+            <View style={styles.paperWidthRow}>
+              {([58, 80] as const).map((width) => {
+                const selected = draftPaperWidth === width;
+                return (
                   <Pressable
-                    key={w}
-                    testID={`bt-width-${w}`}
-                    onPress={() => setBluetoothPaperWidth(w)}
+                    key={width}
+                    testID={`printer-paper-width-${width}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => handleSelectPaperWidth(width)}
                     style={[
-                      styles.chip,
-                      bluetoothPaperWidth === w && styles.chipSelected,
+                      styles.paperChip,
+                      selected && styles.paperChipSelected,
                     ]}
                   >
                     <Text
                       style={[
-                        styles.chipText,
-                        bluetoothPaperWidth === w && styles.chipTextSelected,
+                        styles.paperChipTitle,
+                        selected && styles.paperChipTitleSelected,
                       ]}
                     >
-                      {`${w}mm`}
+                      {`${width}mm`}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.paperChipSub,
+                        selected && styles.paperChipSubSelected,
+                      ]}
+                    >
+                      {width === 58 ? "Thermal Kecil" : "Thermal Lebar"}
                     </Text>
                   </Pressable>
-                ))}
-              </View>
+              );
+            })}
+          </View>
+        </View>
 
-              <SecondaryButton
-                testID="bt-scan-button"
-                variant="tonal"
-                label="Pindai Printer Bluetooth Terpasang"
-                icon={<Search size={16} color={TOKENS.colors.onPrimaryFixed} />}
-                onPress={() => {
-                  void handleScanBt();
-                }}
-              />
-
-              {scannedBtDevices.map((dev) => (
-                <Pressable
-                  key={dev.address}
-                  onPress={() => {
-                    setBluetoothDevice(dev);
-                    setManualBtName(dev.name);
-                    setManualBtMac(dev.address);
-                  }}
-                  style={styles.printerOptionRow}
-                >
-                  <Text style={styles.printerOptionTitle}>{dev.name}</Text>
-                  <Text style={styles.printerOptionAddr}>{dev.address}</Text>
-                </Pressable>
-              ))}
-
-              <InputField
-                label="Nama Printer Bluetooth"
-                value={manualBtName}
-                onChangeText={setManualBtName}
-                placeholder="Contoh: RPP02N-58mm"
-              />
-              <InputField
-                label="Alamat MAC Bluetooth"
-                value={manualBtMac}
-                onChangeText={setManualBtMac}
-                placeholder="00:11:22:33:44:55"
-                monospace
-              />
-              <SecondaryButton
-                variant="outlined"
-                label="Simpan Perangkat Bluetooth"
-                onPress={handleSaveManualBt}
-              />
+        {draftMode === "bluetooth" ? (
+          <View
+            testID="printer-bluetooth-device-box"
+            style={styles.paperWidthBox}
+          >
+            <View style={styles.paperWidthHeader}>
+              <Text style={styles.switchLabel}>Perangkat Printer Bluetooth</Text>
+              <Text style={styles.switchSub}>
+                {btDriverReady
+                  ? bluetoothDevice
+                    ? `Terpilih: ${bluetoothDevice.name} (${bluetoothDevice.address})`
+                    : "Pilih printer thermal yang sudah di-pair di Bluetooth HP."
+                  : "Driver native Bluetooth hanya aktif pada build APK / Development Build (tidak tersedia di Expo Go standar)."}
+              </Text>
             </View>
-          ) : null}
 
-          <PrimaryButton
-            testID="printer-device-test-button"
-            label="Tes Cetak Sekarang"
-            loading={isTestingDevice}
-            loadingLabel="Mengirim Tes Cetak..."
-            disabled={isTestingDevice}
-            icon={<Printer size={18} color={TOKENS.colors.onPrimary} />}
-            onPress={() => {
-              void handleDeviceTestPrint();
-            }}
-          />
-        </SurfaceCard>
-
-        {roleCapabilities.canManageStore ? (
-          <SurfaceCard testID="printer-owner-server-card" style={styles.card}>
-            <Text style={styles.sectionHeading}>
-              Konfigurasi Printer Server &amp; Struk (Owner)
-            </Text>
-
-            {serverPrinters.length > 0 ? (
-              <View style={styles.printersWrap}>
-                <Text style={styles.fieldLabel}>
-                  Printer Terdeteksi di Server
-                </Text>
-                {serverPrinters.map((sp) => {
-                  const chosen = sp.name === selectedServerPrinter;
-                  return (
-                    <Pressable
-                      key={sp.name}
-                      onPress={() => {
-                        setSelectedServerPrinter(sp.name);
-                        setSelectedPrinterType(sp.type);
-                      }}
-                      style={[
-                        styles.printerOptionRow,
-                        chosen && styles.modeCardSelected,
-                      ]}
-                    >
-                      <Text style={styles.printerOptionTitle}>{sp.name}</Text>
-                      <Text style={styles.printerOptionAddr}>
-                        {sp.type.toUpperCase()}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-
-            <InputField
-              testID="printer-server-name-input"
-              label="Nama Printer Server"
-              value={selectedServerPrinter}
-              onChangeText={setSelectedServerPrinter}
-              placeholder="EPSON TM-T82 / POS-58"
+            <SecondaryButton
+              testID="printer-bt-scan-button"
+              variant="tonal"
+              label="Pindai Printer Terpasang (Paired)"
+              loading={isScanningBt}
+              loadingLabel="Memindai Bluetooth..."
+              disabled={isScanningBt}
+              icon={<Bluetooth size={16} color={TOKENS.colors.onPrimaryFixed} />}
+              onPress={() => {
+                void handleScanBluetoothDevices();
+              }}
             />
 
-            <Text style={styles.fieldLabel}>Lebar Kertas Struk Server</Text>
-            <View style={styles.chipRow}>
-              {([58, 80] as const).map((w) => (
+            {pairedDevices.map((dev) => {
+              const isSelected = bluetoothDevice?.address === dev.address;
+              return (
                 <Pressable
-                  key={w}
-                  testID={`server-width-${w}`}
-                  onPress={() => setServerPaperWidth(w)}
+                  key={dev.address}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setBluetoothDevice(dev);
+                    setBanner({
+                      variant: "success",
+                      message: `Printer "${dev.name}" dipilih.`,
+                    });
+                  }}
                   style={[
-                    styles.chip,
-                    serverPaperWidth === w && styles.chipSelected,
+                    styles.btDeviceRow,
+                    isSelected && styles.btDeviceRowSelected,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      serverPaperWidth === w && styles.chipTextSelected,
-                    ]}
-                  >
-                    {`${w}mm`}
-                  </Text>
+                  <View style={styles.modeTextCol}>
+                    <Text style={styles.switchLabel}>{dev.name}</Text>
+                    <Text style={styles.btDeviceAddress}>{dev.address}</Text>
+                  </View>
+                  {isSelected ? (
+                    <View style={styles.selectedCheckCircle}>
+                      <Check size={14} color={TOKENS.colors.onPrimary} />
+                    </View>
+                  ) : null}
                 </Pressable>
-              ))}
-            </View>
+              );
+            })}
+          </View>
+        ) : null}
 
-            <View style={styles.switchRow}>
+        <View style={styles.previewSwitchBox}>
+            <View style={styles.previewSwitchTextCol}>
               <Text style={styles.switchLabel}>
                 Tampilkan Pratinjau Struk Sebelum Cetak
               </Text>
-              <Switch
-                testID="printer-preview-toggle"
-                value={previewBeforePrint}
-                onValueChange={setPreviewBeforePrint}
-              />
+              <Text style={styles.switchSub}>
+                Tampilkan kertas struk di layar sebelum dikirim ke printer.
+              </Text>
             </View>
+            <Switch
+              testID="printer-preview-toggle"
+              value={previewBeforePrint}
+              onValueChange={setPreviewBeforePrint}
+            />
+          </View>
 
-            <InputField
-              testID="printer-footer-note-input"
-              label="Catatan Kaki Struk"
-              value={receiptFooterNote}
-              onChangeText={setReceiptFooterNote}
-              placeholder="Terima kasih sudah berbelanja"
+          <View style={styles.actionsGroup}>
+            <PrimaryButton
+              testID="printer-save-mode-button"
+              label="Simpan Pengaturan Printer"
+              loading={isSaving}
+              loadingLabel="Menyimpan..."
+              disabled={isSaving || isTestingDevice}
+              icon={<Save size={18} color={TOKENS.colors.onPrimary} />}
+              onPress={() => {
+                void handleSavePrinterSettings();
+              }}
             />
 
             <SecondaryButton
-              testID="printer-owner-save-button"
+              testID="printer-device-test-button"
               variant="tonal"
-              label="Simpan Pengaturan Struk Server"
-              loading={isSavingServer}
-              loadingLabel="Menyimpan..."
-              disabled={isSavingServer || !canWriteOnline}
-              icon={<Save size={16} color={TOKENS.colors.onPrimaryFixed} />}
+              label="Tes Cetak Sekarang"
+              loading={isTestingDevice}
+              loadingLabel="Mengirim Tes Cetak..."
+              disabled={isTestingDevice || isSaving}
+              icon={<Printer size={17} color={TOKENS.colors.onPrimaryFixed} />}
               onPress={() => {
-                void handleSaveServerSettings();
+                void handleDeviceTestPrint();
               }}
             />
-          </SurfaceCard>
-        ) : null}
+          </View>
+        </SurfaceCard>
+
+        <SurfaceCard testID="printer-server-redirect-card" style={styles.card}>
+          <View style={styles.redirectHeaderRow}>
+            <View style={styles.redirectIconBadge}>
+              <Info size={18} color={TOKENS.colors.primary} />
+            </View>
+            <Text style={styles.sectionHeading}>
+              Konfigurasi Struk &amp; Printer Server
+            </Text>
+          </View>
+          <Text style={styles.redirectBodyText}>
+            Pengaturan perangkat keras printer server, tata letak bagian struk,
+            serta catatan kaki struk dikelola secara terpusat langsung dari
+            halaman{" "}
+            <Text style={styles.redirectBoldText}>
+              Pengaturan Server / Web Toko Rejeki
+            </Text>
+            .
+          </Text>
+        </SurfaceCard>
       </ScrollView>
     </View>
   );
@@ -587,32 +568,47 @@ const styles = StyleSheet.create({
     gap: TOKENS.spacing.md,
   },
   card: {
-    gap: TOKENS.spacing.md,
+    gap: 12,
   },
   sectionHeading: {
+    flex: 1,
     fontFamily: FONT_FAMILY.heading,
     fontSize: TOKENS.typography.body,
     lineHeight: TOKENS.lineHeight.body,
     color: TOKENS.colors.onSurface,
   },
+  sectionSub: {
+    fontFamily: FONT_FAMILY.body,
+    fontSize: TOKENS.typography.label,
+    lineHeight: 18,
+    color: TOKENS.colors.onSurfaceVariant,
+  },
   modeCard: {
     minHeight: TOKENS.spacing.touchTarget,
     flexDirection: "row",
     alignItems: "center",
-    padding: TOKENS.spacing.md,
+    padding: 12,
     borderRadius: TOKENS.radii.md,
     borderWidth: 1,
     borderColor: TOKENS.colors.borderSubtle,
     backgroundColor: TOKENS.colors.surfaceContainerLow,
-    gap: TOKENS.spacing.sm,
+    gap: 10,
   },
   modeCardSelected: {
     backgroundColor: TOKENS.colors.primaryFixed,
     borderColor: TOKENS.colors.primary,
   },
   modeIconWrap: {
-    width: TOKENS.spacing.xl,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: TOKENS.colors.surfaceCard,
     alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  modeIconWrapSelected: {
+    backgroundColor: TOKENS.colors.primary,
   },
   modeTextCol: {
     flex: 1,
@@ -620,8 +616,8 @@ const styles = StyleSheet.create({
   },
   modeTitle: {
     fontFamily: FONT_FAMILY.bodySemiBold,
-    fontSize: TOKENS.typography.body,
-    lineHeight: TOKENS.lineHeight.body,
+    fontSize: 14,
+    lineHeight: 19,
     color: TOKENS.colors.onSurface,
   },
   modeTitleSelected: {
@@ -629,88 +625,140 @@ const styles = StyleSheet.create({
   },
   modeDesc: {
     fontFamily: FONT_FAMILY.body,
-    fontSize: TOKENS.typography.label,
-    lineHeight: TOKENS.lineHeight.label,
+    fontSize: 12,
+    lineHeight: 16,
     color: TOKENS.colors.onSurfaceVariant,
   },
-  btPanel: {
-    padding: TOKENS.spacing.md,
-    backgroundColor: TOKENS.colors.surfaceContainerLow,
+  selectedCheckCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: TOKENS.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  paperWidthBox: {
+    gap: 10,
+    padding: 12,
     borderRadius: TOKENS.radii.md,
+    backgroundColor: TOKENS.colors.surfaceContainerLow,
     borderWidth: 1,
     borderColor: TOKENS.colors.borderSubtle,
-    gap: TOKENS.spacing.sm,
   },
-  fieldLabel: {
-    fontFamily: FONT_FAMILY.bodySemiBold,
-    fontSize: TOKENS.typography.label,
-    lineHeight: TOKENS.lineHeight.label,
-    color: TOKENS.colors.onSurfaceVariant,
+  paperWidthHeader: {
+    gap: 2,
   },
-  chipRow: {
+  paperWidthRow: {
     flexDirection: "row",
-    gap: TOKENS.spacing.sm,
+    gap: 10,
   },
-  chip: {
-    minWidth: 72,
+  paperChip: {
+    flex: 1,
     minHeight: TOKENS.spacing.touchTarget,
-    paddingHorizontal: TOKENS.spacing.md,
     borderRadius: TOKENS.radii.sm,
     borderWidth: 1,
     borderColor: TOKENS.colors.borderSubtle,
     backgroundColor: TOKENS.colors.surfaceCard,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 2,
   },
-  chipSelected: {
+  paperChipSelected: {
     backgroundColor: TOKENS.colors.primary,
     borderColor: TOKENS.colors.primary,
   },
-  chipText: {
+  paperChipTitle: {
     fontFamily: FONT_FAMILY.monoSemiBold,
-    fontSize: TOKENS.typography.label,
-    lineHeight: TOKENS.lineHeight.label,
+    fontSize: 15,
     color: TOKENS.colors.onSurface,
   },
-  chipTextSelected: {
+  paperChipTitleSelected: {
     color: TOKENS.colors.onPrimary,
   },
-  printersWrap: {
-    gap: TOKENS.spacing.xs,
+  paperChipSub: {
+    fontFamily: FONT_FAMILY.body,
+    fontSize: 11,
+    color: TOKENS.colors.onSurfaceVariant,
   },
-  printerOptionRow: {
-    minHeight: TOKENS.spacing.touchTarget,
+  paperChipSubSelected: {
+    color: TOKENS.colors.primaryFixed,
+  },
+  btDeviceRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: TOKENS.spacing.md,
+    padding: 10,
     borderRadius: TOKENS.radii.sm,
     borderWidth: 1,
     borderColor: TOKENS.colors.borderSubtle,
     backgroundColor: TOKENS.colors.surfaceCard,
+    gap: 8,
   },
-  printerOptionTitle: {
-    fontFamily: FONT_FAMILY.bodySemiBold,
-    fontSize: TOKENS.typography.label,
-    color: TOKENS.colors.onSurface,
+  btDeviceRowSelected: {
+    borderColor: TOKENS.colors.primary,
+    backgroundColor: TOKENS.colors.primaryFixed,
   },
-  printerOptionAddr: {
+  btDeviceAddress: {
     fontFamily: FONT_FAMILY.mono,
-    fontSize: TOKENS.typography.label,
+    fontSize: 11,
     color: TOKENS.colors.onSurfaceVariant,
   },
-  switchRow: {
-    minHeight: TOKENS.spacing.touchTarget,
+  previewSwitchBox: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: TOKENS.spacing.sm,
+    gap: 12,
+    padding: 12,
+    borderRadius: TOKENS.radii.md,
+    backgroundColor: TOKENS.colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: TOKENS.colors.borderSubtle,
+  },
+  previewSwitchTextCol: {
+    flex: 1,
+    gap: 2,
   },
   switchLabel: {
-    flex: 1,
     fontFamily: FONT_FAMILY.bodySemiBold,
-    fontSize: TOKENS.typography.label,
-    lineHeight: TOKENS.lineHeight.label,
+    fontSize: 13,
+    lineHeight: 18,
+    color: TOKENS.colors.onSurface,
+  },
+  switchSub: {
+    fontFamily: FONT_FAMILY.body,
+    fontSize: 11,
+    lineHeight: 15,
+    color: TOKENS.colors.onSurfaceVariant,
+  },
+  actionsGroup: {
+    gap: 10,
+    paddingTop: 2,
+  },
+  redirectHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  redirectIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: TOKENS.colors.primaryFixed,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  redirectBodyText: {
+    fontFamily: FONT_FAMILY.body,
+    fontSize: 13,
+    lineHeight: 19,
+    color: TOKENS.colors.onSurfaceVariant,
+  },
+  redirectBoldText: {
+    fontFamily: FONT_FAMILY.bodySemiBold,
     color: TOKENS.colors.onSurface,
   },
 });

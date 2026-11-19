@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,8 +16,8 @@ import {
   ChevronLeft,
   KeyRound,
   Pencil,
-  Plus,
   Trash2,
+  UserPlus,
   Users,
 } from "lucide-react-native";
 import { EmptyStateCard } from "@/components/common/EmptyStateCard";
@@ -75,6 +77,11 @@ export default function PengaturanAccountsScreen() {
     null
   );
   const [newPassword, setNewPassword] = useState<string>("");
+
+  // Delete confirmation modal state
+  const [deleteTarget, setDeleteTarget] = useState<StaffAccountRecord | null>(
+    null
+  );
 
   const canWriteOnline =
     isDeviceConnected &&
@@ -228,21 +235,24 @@ export default function PengaturanAccountsScreen() {
     }
   };
 
-  const handleDeleteAccount = async (acc: StaffAccountRecord) => {
-    if (!canWriteOnline || isSubmitting) {
+  const handleConfirmDeleteAccount = async () => {
+    if (!deleteTarget || !canWriteOnline || isSubmitting) {
       return;
     }
     setIsSubmitting(true);
     setBanner(null);
     try {
-      const res = await deleteStaffUser(serverConfig, acc.id);
+      const res = await deleteStaffUser(serverConfig, deleteTarget.id);
       if (res.ok) {
+        const deletedUsername = deleteTarget.username;
+        setDeleteTarget(null);
         await reloadAccounts();
         setBanner({
           variant: "success",
-          message: `Akun @${acc.username} dihapus.`,
+          message: `Akun @${deletedUsername} dihapus.`,
         });
       } else {
+        setDeleteTarget(null);
         setBanner({
           variant: "error",
           message: res.error ?? "Gagal menghapus akun staf.",
@@ -264,18 +274,12 @@ export default function PengaturanAccountsScreen() {
           <ChevronLeft size={22} color={TOKENS.colors.onSurface} />
         </Pressable>
         <Text style={styles.topTitle}>Akun &amp; Peran Staf</Text>
-        <Pressable
-          testID="accounts-add-button"
-          accessibilityRole="button"
-          disabled={!canWriteOnline}
-          onPress={openCreateModal}
-          style={[styles.addBtn, !canWriteOnline && styles.disabledBtn]}
-        >
-          <Plus size={18} color={TOKENS.colors.onPrimary} />
-        </Pressable>
       </SafeAreaView>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {banner ? (
           <FeedbackBanner
             testID="accounts-feedback-banner"
@@ -283,6 +287,15 @@ export default function PengaturanAccountsScreen() {
             message={banner.message}
           />
         ) : null}
+
+        {/* Tombol 1 Baris Penuh di Paling Atas Halaman: Tambah Akun */}
+        <PrimaryButton
+          testID="accounts-add-button"
+          label="Tambah Akun"
+          disabled={!canWriteOnline}
+          icon={<UserPlus size={18} color={TOKENS.colors.onPrimary} />}
+          onPress={openCreateModal}
+        />
 
         {accounts.length === 0 ? (
           <EmptyStateCard
@@ -292,7 +305,13 @@ export default function PengaturanAccountsScreen() {
           />
         ) : (
           accounts.map((acc) => {
-            const isSelf = acc.id === activeUser?.id;
+            const isSelf =
+              acc.id === activeUser?.id ||
+              (Boolean(activeUser?.username) &&
+                acc.username.toLowerCase() ===
+                  activeUser?.username.toLowerCase());
+            const deleteDisabled = isSelf || !canWriteOnline || isSubmitting;
+
             return (
               <SurfaceCard
                 key={acc.id}
@@ -301,7 +320,12 @@ export default function PengaturanAccountsScreen() {
               >
                 <View style={styles.cardHeader}>
                   <View style={styles.identityCol}>
-                    <Text style={styles.accName}>{acc.fullName}</Text>
+                    <View style={styles.nameLine}>
+                      <Text style={styles.accName}>{acc.fullName}</Text>
+                      {isSelf ? (
+                        <Text style={styles.selfBadge}>Anda</Text>
+                      ) : null}
+                    </View>
                     <Text style={styles.accUsername}>{`@${acc.username}`}</Text>
                   </View>
                   <View style={styles.badgesCol}>
@@ -336,19 +360,35 @@ export default function PengaturanAccountsScreen() {
                     }}
                     style={styles.actionBtn}
                   />
-                  {!isSelf ? (
-                    <Pressable
-                      testID={`account-delete-${acc.username}`}
-                      accessibilityRole="button"
-                      disabled={!canWriteOnline || isSubmitting}
-                      onPress={() => {
-                        void handleDeleteAccount(acc);
-                      }}
-                      style={styles.deleteBtn}
-                    >
-                      <Trash2 size={18} color={TOKENS.colors.destructive} />
-                    </Pressable>
-                  ) : null}
+                  <Pressable
+                    testID={`account-delete-${acc.username}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isSelf
+                        ? `Akun sendiri @${acc.username} tidak dapat dihapus`
+                        : `Hapus akun @${acc.username}`
+                    }
+                    accessibilityState={{ disabled: deleteDisabled }}
+                    disabled={deleteDisabled}
+                    onPress={() => {
+                      if (!isSelf) {
+                        setDeleteTarget(acc);
+                      }
+                    }}
+                    style={[
+                      styles.deleteBtn,
+                      deleteDisabled && styles.deleteBtnDisabled,
+                    ]}
+                  >
+                    <Trash2
+                      size={18}
+                      color={
+                        deleteDisabled
+                          ? TOKENS.colors.outline
+                          : TOKENS.colors.destructive
+                      }
+                    />
+                  </Pressable>
                 </View>
               </SurfaceCard>
             );
@@ -356,6 +396,7 @@ export default function PengaturanAccountsScreen() {
         )}
       </ScrollView>
 
+      {/* Modal Tambah / Ubah Akun (Tombol Sebaris: Kiri Batal, Kanan Simpan) */}
       <Modal
         visible={editorState !== null}
         transparent
@@ -363,7 +404,14 @@ export default function PengaturanAccountsScreen() {
         statusBarTranslucent
         onRequestClose={() => setEditorState(null)}
       >
-        <View style={styles.backdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.backdrop}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setEditorState(null)}
+          />
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
               {editorState?.mode === "create"
@@ -429,23 +477,30 @@ export default function PengaturanAccountsScreen() {
               </View>
             ) : null}
 
-            <PrimaryButton
-              testID="account-form-submit"
-              label="Simpan"
-              loading={isSubmitting}
-              onPress={() => {
-                void handleSaveAccount();
-              }}
-            />
-            <SecondaryButton
-              variant="tonal"
-              label="Batal"
-              onPress={() => setEditorState(null)}
-            />
+            <View style={styles.modalActionsRow}>
+              <SecondaryButton
+                variant="tonal"
+                label="Batal"
+                disabled={isSubmitting}
+                onPress={() => setEditorState(null)}
+                style={styles.modalBtnHalf}
+              />
+              <PrimaryButton
+                testID="account-form-submit"
+                label="Simpan"
+                loading={isSubmitting}
+                disabled={isSubmitting}
+                onPress={() => {
+                  void handleSaveAccount();
+                }}
+                style={styles.modalBtnHalf}
+              />
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
+      {/* Modal Ubah / Reset Kata Sandi (Tombol Sebaris: Kiri Batal, Kanan Simpan) */}
       <Modal
         visible={resetTarget !== null}
         transparent
@@ -453,10 +508,17 @@ export default function PengaturanAccountsScreen() {
         statusBarTranslucent
         onRequestClose={() => setResetTarget(null)}
       >
-        <View style={styles.backdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.backdrop}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setResetTarget(null)}
+          />
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {`Reset Sandi @${resetTarget?.username ?? ""}`}
+              {`Ubah Kata Sandi @${resetTarget?.username ?? ""}`}
             </Text>
             <InputField
               testID="account-reset-pw-input"
@@ -465,19 +527,74 @@ export default function PengaturanAccountsScreen() {
               onChangeText={setNewPassword}
               secureTextEntry
             />
-            <PrimaryButton
-              testID="account-reset-pw-submit"
-              label="Simpan Kata Sandi Baru"
-              loading={isSubmitting}
-              onPress={() => {
-                void handleResetPassword();
-              }}
-            />
-            <SecondaryButton
-              variant="tonal"
-              label="Batal"
-              onPress={() => setResetTarget(null)}
-            />
+            <View style={styles.modalActionsRow}>
+              <SecondaryButton
+                variant="tonal"
+                label="Batal"
+                disabled={isSubmitting}
+                onPress={() => setResetTarget(null)}
+                style={styles.modalBtnHalf}
+              />
+              <PrimaryButton
+                testID="account-reset-pw-submit"
+                label="Simpan"
+                loading={isSubmitting}
+                disabled={isSubmitting}
+                onPress={() => {
+                  void handleResetPassword();
+                }}
+                style={styles.modalBtnHalf}
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal Konfirmasi Hapus Akun (Tombol Sebaris: Kiri Batal, Kanan Hapus) */}
+      <Modal
+        visible={deleteTarget !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setDeleteTarget(null)}
+      >
+        <View style={styles.backdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setDeleteTarget(null)}
+          />
+          <View style={styles.modalCard}>
+            <View style={styles.deleteHeaderRow}>
+              <View style={styles.deleteIconBadge}>
+                <Trash2 size={20} color={TOKENS.colors.destructive} />
+              </View>
+              <Text style={styles.modalTitle}>
+                {`Hapus Akun @${deleteTarget?.username ?? ""}?`}
+              </Text>
+            </View>
+            <Text style={styles.deleteBodyText}>
+              {`Akun staf "${deleteTarget?.fullName ?? ""}" akan dihapus permanen dari akses aplikasi kasir.`}
+            </Text>
+            <View style={styles.modalActionsRow}>
+              <SecondaryButton
+                variant="tonal"
+                label="Batal"
+                disabled={isSubmitting}
+                onPress={() => setDeleteTarget(null)}
+                style={styles.modalBtnHalf}
+              />
+              <SecondaryButton
+                testID="account-delete-confirm-button"
+                variant="danger"
+                label="Ya, Hapus"
+                loading={isSubmitting}
+                disabled={isSubmitting}
+                onPress={() => {
+                  void handleConfirmDeleteAccount();
+                }}
+                style={styles.modalBtnHalf}
+              />
+            </View>
           </View>
         </View>
       </Modal>
@@ -513,17 +630,6 @@ const styles = StyleSheet.create({
     lineHeight: TOKENS.lineHeight.heading,
     color: TOKENS.colors.onSurface,
   },
-  addBtn: {
-    width: TOKENS.spacing.touchTarget,
-    height: TOKENS.spacing.touchTarget,
-    borderRadius: TOKENS.radii.sm,
-    backgroundColor: TOKENS.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  disabledBtn: {
-    opacity: 0.45,
-  },
   scrollContent: {
     padding: TOKENS.spacing.md,
     gap: TOKENS.spacing.md,
@@ -541,11 +647,27 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  nameLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+  },
   accName: {
     fontFamily: FONT_FAMILY.heading,
     fontSize: TOKENS.typography.body,
     lineHeight: TOKENS.lineHeight.body,
     color: TOKENS.colors.onSurface,
+  },
+  selfBadge: {
+    fontFamily: FONT_FAMILY.bodySemiBold,
+    fontSize: 11,
+    lineHeight: 15,
+    color: TOKENS.colors.onPrimaryFixed,
+    backgroundColor: TOKENS.colors.primaryFixed,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 6,
   },
   accUsername: {
     fontFamily: FONT_FAMILY.mono,
@@ -581,19 +703,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  deleteBtnDisabled: {
+    backgroundColor: TOKENS.colors.surfaceContainer,
+    borderWidth: 1,
+    borderColor: TOKENS.colors.borderSubtle,
+    opacity: 0.55,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: TOKENS.colors.modalBackdrop,
     justifyContent: "center",
-    padding: TOKENS.spacing.lg,
+    padding: TOKENS.spacing.md,
   },
   modalCard: {
     backgroundColor: TOKENS.colors.surfaceCard,
     borderRadius: TOKENS.radii.lg,
+    borderWidth: 1,
+    borderColor: TOKENS.colors.borderSubtle,
     padding: TOKENS.spacing.lg,
     gap: TOKENS.spacing.sm,
   },
   modalTitle: {
+    flex: 1,
     fontFamily: FONT_FAMILY.heading,
     fontSize: TOKENS.typography.body,
     lineHeight: TOKENS.lineHeight.body,
@@ -634,5 +765,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  modalActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingTop: 6,
+  },
+  modalBtnHalf: {
+    flex: 1,
+  },
+  deleteHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  deleteIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: TOKENS.radii.md,
+    backgroundColor: TOKENS.colors.errorContainer,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  deleteBodyText: {
+    fontFamily: FONT_FAMILY.body,
+    fontSize: TOKENS.typography.label,
+    lineHeight: 19,
+    color: TOKENS.colors.onSurfaceVariant,
   },
 });

@@ -169,6 +169,11 @@ export function normalizeCategoryRecord(
 }
 
 export function normalizeUnitRecord(raw: Record<string, unknown>): Unit {
+  const countVal =
+    raw.productCount ??
+    raw.product_count ??
+    raw.variantCount ??
+    raw.variant_count;
   return {
     id: String(raw.id ?? ""),
     name: String(raw.name ?? ""),
@@ -176,9 +181,8 @@ export function normalizeUnitRecord(raw: Record<string, unknown>): Unit {
     description:
       typeof raw.description === "string" ? raw.description : null,
     isActive: toBoolean(raw.isActive ?? raw.is_active, true),
-    ...(typeof (raw.productCount ?? raw.product_count) === "number" ||
-    typeof (raw.productCount ?? raw.product_count) === "string"
-      ? { productCount: toFiniteNumber(raw.productCount ?? raw.product_count, 0) }
+    ...(typeof countVal === "number" || typeof countVal === "string"
+      ? { productCount: toFiniteNumber(countVal, 0) }
       : {}),
     deletedAt:
       typeof (raw.deletedAt ?? raw.deleted_at) === "string"

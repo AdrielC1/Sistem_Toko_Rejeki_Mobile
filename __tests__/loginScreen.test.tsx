@@ -8,7 +8,8 @@ import {
 } from "@testing-library/react-native";
 import { resetTestStorage } from "./setup";
 import LoginScreen from "@/app/(auth)/login";
-import { AuthProvider } from "@/context/AuthContext";
+import { ServerUrlPanel } from "@/components/common/ServerUrlPanel";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import {
   getStoredServerUrl,
   setCachedStoreSettings,
@@ -29,6 +30,25 @@ async function renderLogin() {
   return render(
     <AuthProvider>
       <LoginScreen />
+    </AuthProvider>
+  );
+}
+
+function ConnectedServerUrlPanel() {
+  const { serverConfig, saveServerConfig, testDualServerUrl } = useAuth();
+  return (
+    <ServerUrlPanel
+      savedServerConfig={serverConfig}
+      onSaveConfig={saveServerConfig}
+      onTestDualConnection={testDualServerUrl}
+    />
+  );
+}
+
+async function renderServerUrlPanel() {
+  return render(
+    <AuthProvider>
+      <ConnectedServerUrlPanel />
     </AuthProvider>
   );
 }
@@ -80,10 +100,7 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
 
     const { unmount } = await renderLogin();
     await waitFor(() => {
-      expect(
-        screen.getByTestId("server-url-panel-toggle").props.accessibilityState
-          .expanded
-      ).toBe(false);
+      expect(screen.getByTestId("login-password-input")).toBeTruthy();
     });
 
     const passwordInput = screen.getByTestId("login-password-input");
@@ -158,10 +175,7 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
 
     const { unmount } = await renderLogin();
     await waitFor(() => {
-      expect(
-        screen.getByTestId("server-url-panel-toggle").props.accessibilityState
-          .expanded
-      ).toBe(false);
+      expect(screen.getByTestId("login-submit-button")).toBeTruthy();
     });
 
     const fetchMock = globalThis.fetch as jest.Mock;
@@ -284,15 +298,14 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     setStoredServerConfigRaw(
       JSON.stringify({ primaryUrl: null, fallbackUrl: null })
     );
-    const first = await renderLogin();
+    const first = await renderServerUrlPanel();
 
     await waitFor(() => {
-      expect(screen.getByText("Alamat Server Belum Terhubung")).toBeTruthy();
+      expect(
+        screen.getByTestId("server-url-panel-toggle").props.accessibilityState
+          .expanded
+      ).toBe(true);
     });
-    expect(
-      screen.getByTestId("server-url-panel-toggle").props.accessibilityState
-        .expanded
-    ).toBe(true);
 
     const fetchMock = globalThis.fetch as jest.Mock;
     let resolveSettings!: (val: unknown) => void;
@@ -330,13 +343,10 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
       expect(screen.getByText("Server LAN Terhubung")).toBeTruthy();
     });
     expect(getStoredServerUrl()).toBe(BASE_URL);
-    expect(screen.getByText("Toko Rejeki Utama")).toBeTruthy();
-    expect(screen.getByTestId("store-logo-image")).toBeTruthy();
-    expect(screen.queryByTestId("server-unconfigured-banner")).toBeNull();
     await first.unmount();
 
     // Now render fresh with saved URL and test invalid + unreachable draft preservation
-    const second = await renderLogin();
+    const second = await renderServerUrlPanel();
     await waitFor(() => {
       expect(
         screen.getByTestId("server-url-panel-toggle").props.accessibilityState
@@ -383,7 +393,7 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     await second.unmount();
   });
 
-  it("WR-05: locks ServerUrlPanel input & hint chips during test and ignores unmount completion cleanly", async () => {
+  it("WR-05: locks ServerUrlPanel inputs during test and ignores unmount completion cleanly", async () => {
     setStoredServerConfigRaw(
       JSON.stringify({ primaryUrl: null, fallbackUrl: null })
     );
@@ -395,7 +405,7 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
       })
     );
 
-    const view = await renderLogin();
+    const view = await renderServerUrlPanel();
     await waitFor(() => {
       expect(screen.getByTestId("server-url-input")).toBeTruthy();
     });
@@ -414,19 +424,8 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     expect(
       screen.getByTestId("server-cloud-url-input").props.editable
     ).toBe(false);
-    expect(
-      screen.getByTestId("server-hint-lan").props.accessibilityState.disabled
-    ).toBe(true);
-    expect(
-      screen.getByTestId("server-hint-emulator").props.accessibilityState
-        .disabled
-    ).toBe(true);
-    expect(
-      screen.getByTestId("server-hint-cloud").props.accessibilityState.disabled
-    ).toBe(true);
 
-    // Attempt mid-flight edit and hint chip tap -> draftUrl remains unchanged
-    await fireEvent.press(screen.getByTestId("server-hint-emulator"));
+    // Attempt mid-flight edit -> draftUrl remains unchanged
     await fireEvent.changeText(
       screen.getByTestId("server-url-input"),
       "http://10.0.2.2:3000"
@@ -447,8 +446,8 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     });
   });
 
-  it("populates fresh install defaults (LAN + Cloud) and supports 3 quick-fill hint chips", async () => {
-    const view = await renderLogin();
+  it("populates fresh install defaults (192.168.1.100:3000 + kasir.tokorejeki.my.id) without preset buttons", async () => {
+    const view = await renderServerUrlPanel();
     await waitFor(() => {
       expect(
         screen.getByText(
@@ -458,20 +457,15 @@ describe("LoginScreen and ServerUrlPanel (E1 & E2 UI-SPEC)", () => {
     });
 
     await fireEvent.press(screen.getByTestId("server-url-panel-toggle"));
-    await fireEvent.changeText(screen.getByTestId("server-url-input"), "");
-    await fireEvent.changeText(
-      screen.getByTestId("server-cloud-url-input"),
-      ""
-    );
-
-    await fireEvent.press(screen.getByTestId("server-hint-lan"));
-    await fireEvent.press(screen.getByTestId("server-hint-cloud"));
     expect(screen.getByTestId("server-url-input").props.value).toBe(
       DEFAULT_PRIMARY_SERVER_URL
     );
     expect(screen.getByTestId("server-cloud-url-input").props.value).toBe(
       DEFAULT_CLOUD_SERVER_URL
     );
+    expect(screen.queryByTestId("server-hint-lan")).toBeNull();
+    expect(screen.queryByTestId("server-hint-emulator")).toBeNull();
+    expect(screen.queryByTestId("server-hint-cloud")).toBeNull();
 
     await view.unmount();
   });

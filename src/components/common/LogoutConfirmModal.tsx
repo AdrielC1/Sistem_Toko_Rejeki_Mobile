@@ -70,22 +70,24 @@ export function LogoutConfirmModal({
               </Text>
             </View>
 
-            <View style={styles.actionsStack}>
+            <View style={styles.actionsRow}>
               <SecondaryButton
                 testID="logout-cancel-button"
                 variant="tonal"
-                label="Tetap Masuk"
+                label="Batalkan"
                 disabled={isSubmitting}
                 onPress={onCancel}
+                style={styles.actionBtnHalf}
               />
               <SecondaryButton
                 testID="logout-confirm-button"
                 variant="danger"
-                label="Ya, Akhiri Sesi"
+                label="Keluar"
                 loading={isSubmitting}
                 loadingLabel="Mengakhiri Sesi..."
                 disabled={isSubmitting}
                 onPress={onConfirm}
+                style={styles.actionBtnHalf}
               />
             </View>
           </ScrollView>
@@ -171,7 +173,12 @@ const styles = StyleSheet.create({
     lineHeight: TOKENS.lineHeight.label,
     color: TOKENS.colors.onSurfaceVariant,
   },
-  actionsStack: {
-    gap: TOKENS.spacing.sm,
+  actionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  actionBtnHalf: {
+    flex: 1,
   },
 });

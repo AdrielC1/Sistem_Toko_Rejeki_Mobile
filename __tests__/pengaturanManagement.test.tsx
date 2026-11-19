@@ -123,8 +123,9 @@ describe("Phase 5 Pengaturan Hub, Profile/About, Store Profile read-merge-write,
         "Toko Rejeki Utama"
       );
     });
-    expect(screen.getByText("v1.0.0")).toBeTruthy();
+    expect(screen.getByText("Adriel Christofer Widya")).toBeTruthy();
     expect(screen.getByText("Apps Toko Rejeki Mobile POS")).toBeTruthy();
+    expect(screen.queryByTestId("about-app-version")).toBeNull();
     await view.unmount();
   });
 

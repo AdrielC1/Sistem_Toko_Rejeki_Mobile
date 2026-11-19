@@ -68,13 +68,14 @@ export function ResetCacheConfirmModal({
               </Text>
             </View>
 
-            <View style={styles.actionsStack}>
+            <View style={styles.actionsRow}>
               <SecondaryButton
                 testID="reset-cache-cancel-button"
                 variant="tonal"
                 label="Batal"
                 disabled={isSubmitting}
                 onPress={onCancel}
+                style={styles.actionBtnHalf}
               />
               <SecondaryButton
                 testID="reset-cache-confirm-button"
@@ -84,6 +85,7 @@ export function ResetCacheConfirmModal({
                 loadingLabel="Mereset Cache..."
                 disabled={isSubmitting}
                 onPress={onConfirm}
+                style={styles.actionBtnHalf}
               />
             </View>
           </ScrollView>
@@ -158,8 +160,13 @@ const styles = StyleSheet.create({
     lineHeight: TOKENS.lineHeight.label,
     color: TOKENS.colors.warningText,
   },
-  actionsStack: {
-    gap: TOKENS.spacing.sm,
+  actionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     marginTop: TOKENS.spacing.xs,
+  },
+  actionBtnHalf: {
+    flex: 1,
   },
 });

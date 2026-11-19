@@ -25,6 +25,7 @@ export interface ReceiptPreviewModalProps {
   printerMode: PrinterDeviceMode;
   isSubmitting: boolean;
   onChangeCopies: (copies: 2 | 3) => void;
+  onChangePaperWidth?: (width: 58 | 80) => void;
   onClose: () => void;
   onConfirmPrint: () => void;
 }
@@ -43,6 +44,7 @@ export function ReceiptPreviewModal({
   printerMode,
   isSubmitting,
   onChangeCopies,
+  onChangePaperWidth,
   onClose,
   onConfirmPrint,
 }: ReceiptPreviewModalProps) {
@@ -156,34 +158,69 @@ export function ReceiptPreviewModal({
               <Text style={styles.metaLabel}>
                 {`Mode: ${MODE_LABELS[printerMode]}`}
               </Text>
-              <View style={styles.copiesGroup}>
-                <Text style={styles.metaLabel}>Salinan:</Text>
-                {([2, 3] as const).map((val) => {
-                  const selected = copies === val;
-                  return (
-                    <Pressable
-                      key={val}
-                      testID={`receipt-copies-${val}`}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      disabled={isSubmitting}
-                      onPress={() => onChangeCopies(val)}
-                      style={[
-                        styles.copyChip,
-                        selected && styles.copyChipSelected,
-                      ]}
-                    >
-                      <Text
+              <View style={styles.metaRightControls}>
+                {onChangePaperWidth ? (
+                  <View style={styles.copiesGroup}>
+                    <Text style={styles.metaLabel}>Kertas:</Text>
+                    {([58, 80] as const).map((w) => {
+                      const selected =
+                        (isWidePaper && w === 80) || (!isWidePaper && w === 58);
+                      return (
+                        <Pressable
+                          key={w}
+                          testID={`receipt-paper-${w}`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          disabled={isSubmitting}
+                          onPress={() => onChangePaperWidth(w)}
+                          style={[
+                            styles.copyChip,
+                            selected && styles.copyChipSelected,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.copyChipText,
+                              selected && styles.copyChipTextSelected,
+                            ]}
+                          >
+                            {`${w}mm`}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                <View style={styles.copiesGroup}>
+                  <Text style={styles.metaLabel}>Salinan:</Text>
+                  {([2, 3] as const).map((val) => {
+                    const selected = copies === val;
+                    return (
+                      <Pressable
+                        key={val}
+                        testID={`receipt-copies-${val}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        disabled={isSubmitting}
+                        onPress={() => onChangeCopies(val)}
                         style={[
-                          styles.copyChipText,
-                          selected && styles.copyChipTextSelected,
+                          styles.copyChip,
+                          selected && styles.copyChipSelected,
                         ]}
                       >
-                        {`${val}x`}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                        <Text
+                          style={[
+                            styles.copyChipText,
+                            selected && styles.copyChipTextSelected,
+                          ]}
+                        >
+                          {`${val}x`}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
             </View>
 
@@ -322,8 +359,15 @@ const styles = StyleSheet.create({
   },
   metaBar: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: TOKENS.spacing.sm,
+  },
+  metaRightControls: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
     gap: TOKENS.spacing.sm,
   },
   metaLabel: {

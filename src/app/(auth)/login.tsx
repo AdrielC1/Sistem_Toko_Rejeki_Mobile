@@ -18,7 +18,6 @@ import {
   Lock,
   User,
 } from "lucide-react-native";
-import { ServerUrlPanel } from "@/components/common/ServerUrlPanel";
 import {
   FeedbackBanner,
   InputField,
@@ -35,11 +34,8 @@ export default function LoginScreen() {
     retryAfterSeconds,
     authError,
     sessionNotice,
-    serverConfig,
     storeSettings,
     login,
-    saveServerConfig,
-    testDualServerUrl,
     clearAuthFeedback,
   } = useAuth();
 
@@ -124,21 +120,6 @@ export default function LoginScreen() {
                 </Text>
               </View>
 
-              {!serverConfig.primaryUrl && !serverConfig.fallbackUrl ? (
-                <FeedbackBanner
-                  testID="server-unconfigured-banner"
-                  variant="info"
-                  title="Alamat Server Belum Terhubung"
-                  message="Buka panel Alamat Server API, masukkan URL server LAN atau Cloud toko, lalu ketuk Tes Koneksi Server."
-                />
-              ) : null}
-
-              <ServerUrlPanel
-                savedServerConfig={serverConfig}
-                onSaveConfig={saveServerConfig}
-                onTestDualConnection={testDualServerUrl}
-              />
-
               {isThrottled ? (
                 <FeedbackBanner
                   testID="login-throttle-banner"
@@ -219,7 +200,6 @@ export default function LoginScreen() {
                   loading={isLoggingIn}
                   loadingLabel="Memeriksa Akses..."
                   disabled={isLoggingIn || isThrottled}
-                  // Arrow signals forward authentication entry into the POS shell
                   icon={
                     !isLoggingIn && !isThrottled ? (
                       <ArrowRight size={18} color={TOKENS.colors.onPrimary} />

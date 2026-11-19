@@ -73,10 +73,9 @@ export async function executeReceiptPrint(params: {
   bluetoothDevice: PairedBluetoothPrinter | null;
   bluetoothPaperWidth: 58 | 80;
 }): Promise<UnifiedPrintResult> {
-  const paperWidthMm =
-    params.mode === "bluetooth"
-      ? params.bluetoothPaperWidth
-      : params.storeSettings?.printerPaperWidth ?? 58;
+  const paperWidthMm: 58 | 80 =
+    params.bluetoothPaperWidth ??
+    (params.storeSettings?.printerPaperWidth === 80 ? 80 : 58);
 
   if (params.mode === "system") {
     try {
@@ -152,10 +151,13 @@ export async function executeReceiptPrint(params: {
   }
 
   // Default: "server"
+  const serverSettings = params.storeSettings
+    ? { ...params.storeSettings, printerPaperWidth: paperWidthMm }
+    : null;
   const serverRes = await submitServerPrintJob(params.serverConfig, {
     order: params.order,
     copies: params.copies,
-    settings: params.storeSettings,
+    settings: serverSettings,
   });
 
   return {

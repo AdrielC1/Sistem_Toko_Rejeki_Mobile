@@ -2,6 +2,7 @@ import {
   apiRequestWithFailover,
   type FailoverApiRequestResult,
 } from "@/services/api/apiClient";
+import { getActiveCatalogScopeQuery } from "@/store/catalogScopeStore";
 import {
   normalizeCategoryRecord,
   normalizeServerProduct,
@@ -132,9 +133,10 @@ export async function fetchFullCatalogSync(
   config: ServerUrlConfig,
   clientId?: string
 ): Promise<{ data: SyncFullResponse; usedRoute: ServerRoute }> {
+  const scopeQuery = getActiveCatalogScopeQuery("?");
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    "/api/sync/full?scope=mini",
+    `/api/sync/full${scopeQuery}`,
     {
       method: "GET",
       timeoutMs: 15000,
@@ -201,9 +203,13 @@ export async function fetchDeltaCatalogSync(
   since: string,
   clientId?: string
 ): Promise<{ data: SyncDeltaResponse; usedRoute: ServerRoute }> {
+  const scopePrefix = getActiveCatalogScopeQuery("?");
+  const deltaUrl = scopePrefix
+    ? `/api/sync/delta${scopePrefix}&since=${encodeURIComponent(since)}`
+    : `/api/sync/delta?since=${encodeURIComponent(since)}`;
   const res = await apiRequestWithFailover<Record<string, unknown>>(
     config,
-    `/api/sync/delta?scope=mini&since=${encodeURIComponent(since)}`,
+    deltaUrl,
     {
       method: "GET",
       timeoutMs: 8000,

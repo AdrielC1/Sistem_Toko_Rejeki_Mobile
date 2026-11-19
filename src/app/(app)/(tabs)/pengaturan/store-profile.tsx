@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, Save, Store, Trash2, Upload } from "lucide-react-native";
@@ -33,6 +41,8 @@ export default function PengaturanStoreProfileScreen() {
   const [storeLogo, setStoreLogo] = useState<string>(
     storeSettings?.storeLogo ?? ""
   );
+  const [confirmClearLogoOpen, setConfirmClearLogoOpen] =
+    useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [banner, setBanner] = useState<{
     variant: "success" | "error";
@@ -152,7 +162,7 @@ export default function PengaturanStoreProfileScreen() {
                   variant="danger-outline"
                   label="Hapus Logo"
                   icon={<Trash2 size={16} color={TOKENS.colors.destructive} />}
-                  onPress={() => setStoreLogo("")}
+                  onPress={() => setConfirmClearLogoOpen(true)}
                 />
               ) : null}
             </View>
@@ -195,6 +205,52 @@ export default function PengaturanStoreProfileScreen() {
           />
         </SurfaceCard>
       </ScrollView>
+
+      <Modal
+        testID="store-profile-clear-logo-modal"
+        visible={confirmClearLogoOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setConfirmClearLogoOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setConfirmClearLogoOpen(false)}
+          />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalIconBadge}>
+                <Trash2 size={20} color={TOKENS.colors.destructive} />
+              </View>
+              <Text style={styles.modalTitleText}>Hapus Logo Toko?</Text>
+            </View>
+            <Text style={styles.modalBodyText}>
+              Logo toko saat ini akan dihapus dari pratinjau dan struk setelah
+              Anda menekan tombol Simpan Profil Toko.
+            </Text>
+            <View style={styles.modalActionsRow}>
+              <SecondaryButton
+                variant="tonal"
+                label="Batal"
+                onPress={() => setConfirmClearLogoOpen(false)}
+                style={styles.modalBtnHalf}
+              />
+              <SecondaryButton
+                testID="store-profile-confirm-clear-logo"
+                variant="danger"
+                label="Ya, Hapus Logo"
+                onPress={() => {
+                  setStoreLogo("");
+                  setConfirmClearLogoOpen(false);
+                }}
+                style={styles.modalBtnHalf}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -256,5 +312,55 @@ const styles = StyleSheet.create({
   logoButtonsCol: {
     flex: 1,
     gap: TOKENS.spacing.xs,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: TOKENS.colors.modalBackdrop,
+    justifyContent: "center",
+    padding: TOKENS.spacing.md,
+  },
+  modalCard: {
+    backgroundColor: TOKENS.colors.surfaceCard,
+    borderRadius: TOKENS.radii.lg,
+    borderWidth: 1,
+    borderColor: TOKENS.colors.borderSubtle,
+    padding: TOKENS.spacing.lg,
+    gap: TOKENS.spacing.md,
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  modalIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: TOKENS.radii.md,
+    backgroundColor: TOKENS.colors.errorContainer,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  modalTitleText: {
+    flex: 1,
+    fontFamily: FONT_FAMILY.heading,
+    fontSize: 17,
+    lineHeight: 22,
+    color: TOKENS.colors.onSurface,
+  },
+  modalBodyText: {
+    fontFamily: FONT_FAMILY.body,
+    fontSize: TOKENS.typography.label,
+    lineHeight: 19,
+    color: TOKENS.colors.onSurfaceVariant,
+  },
+  modalActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingTop: 4,
+  },
+  modalBtnHalf: {
+    flex: 1,
   },
 });

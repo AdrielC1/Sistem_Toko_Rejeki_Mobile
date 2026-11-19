@@ -25,6 +25,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: "com.tokorejeki.posmobile",
     predictiveBackGestureEnabled: false,
+    permissions: [
+      "BLUETOOTH",
+      "BLUETOOTH_ADMIN",
+      "BLUETOOTH_CONNECT",
+      "BLUETOOTH_SCAN",
+    ],
     adaptiveIcon: {
       backgroundColor: "#00478d",
       foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -35,6 +41,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-secure-store",
+    [
+      "with-rn-bluetooth-classic",
+      {
+        peripheralUsageDescription:
+          "Aplikasi memerlukan akses Bluetooth untuk mencetak struk ke printer thermal ESC/POS.",
+        bluetoothAlwaysPermission:
+          "Aplikasi memerlukan akses Bluetooth untuk terhubung ke printer thermal kasir.",
+      },
+    ],
     [
       "expo-splash-screen",
       {

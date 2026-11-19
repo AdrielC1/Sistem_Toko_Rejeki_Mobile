@@ -47,6 +47,7 @@ export default function PengaturanScreen() {
     testDualServerUrl,
   } = useAuth();
   const printerMode = usePrinterPrefsStore((s) => s.mode);
+  const paperWidth = usePrinterPrefsStore((s) => s.bluetoothPaperWidth);
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const isMountedRef = useRef(true);
@@ -97,9 +98,9 @@ export default function PengaturanScreen() {
               ]}
             >
               {roleStyle.icon === "shield-check" ? (
-                <ShieldCheck size={24} color={TOKENS.colors.onPrimary} />
+                <ShieldCheck size={30} color={TOKENS.colors.onPrimary} />
               ) : (
-                <User size={24} color={TOKENS.colors.onPrimary} />
+                <User size={30} color={TOKENS.colors.onPrimary} />
               )}
             </View>
 
@@ -142,30 +143,7 @@ export default function PengaturanScreen() {
               <View style={styles.menuTextCol}>
                 <Text style={styles.menuTitle}>Printer &amp; Metode Cetak</Text>
                 <Text style={styles.menuSubtitle}>
-                  {`Aktif: ${PRINTER_MODE_SHORT[printerMode]}`}
-                </Text>
-              </View>
-            </View>
-            <ChevronRight size={18} color={TOKENS.colors.outline} />
-          </Pressable>
-
-          <Pressable
-            testID="pengaturan-nav-about"
-            accessibilityRole="button"
-            onPress={() => router.push("/pengaturan/about")}
-            style={({ pressed }) => [
-              styles.menuItemRow,
-              pressed && styles.menuItemPressed,
-            ]}
-          >
-            <View style={styles.menuItemLeft}>
-              <Info size={18} color={TOKENS.colors.primary} />
-              <View style={styles.menuTextCol}>
-                <Text style={styles.menuTitle}>
-                  Profil Toko &amp; Tentang Aplikasi
-                </Text>
-                <Text style={styles.menuSubtitle}>
-                  Identitas toko, versi aplikasi, &amp; status API
+                  {`Aktif: ${PRINTER_MODE_SHORT[printerMode]} · Kertas ${paperWidth}mm`}
                 </Text>
               </View>
             </View>
@@ -298,6 +276,28 @@ export default function PengaturanScreen() {
             Akhiri sesi akun aktif pada perangkat ini untuk berganti kasir atau
             mengamankan terminal.
           </Text>
+          <Pressable
+            testID="pengaturan-nav-about"
+            accessibilityRole="button"
+            onPress={() => router.push("/pengaturan/about")}
+            style={({ pressed }) => [
+              styles.menuItemRow,
+              pressed && styles.menuItemPressed,
+            ]}
+          >
+            <View style={styles.menuItemLeft}>
+              <Info size={18} color={TOKENS.colors.primary} />
+              <View style={styles.menuTextCol}>
+                <Text style={styles.menuTitle}>
+                  Profil Toko &amp; Tentang Aplikasi
+                </Text>
+                <Text style={styles.menuSubtitle}>
+                  Identitas toko, versi aplikasi, &amp; status API
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color={TOKENS.colors.outline} />
+          </Pressable>
           <SecondaryButton
             testID="pengaturan-logout-button"
             variant="danger-outline"
@@ -343,13 +343,13 @@ const styles = StyleSheet.create({
   },
   profileRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: TOKENS.spacing.md,
   },
   avatarBox: {
-    width: TOKENS.spacing.touchTarget,
-    height: TOKENS.spacing.touchTarget,
-    borderRadius: TOKENS.radii.md,
+    width: 68,
+    height: 68,
+    borderRadius: TOKENS.radii.lg,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
@@ -357,7 +357,8 @@ const styles = StyleSheet.create({
   profileDetails: {
     flex: 1,
     minWidth: 0,
-    gap: TOKENS.spacing.xs,
+    justifyContent: "center",
+    gap: 3,
   },
   profileFullName: {
     fontFamily: FONT_FAMILY.heading,

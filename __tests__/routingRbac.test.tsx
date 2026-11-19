@@ -161,7 +161,7 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
       expect(screen.getByText("Masuk ke Sistem")).toBeTruthy();
       expect(rootView.getPathname()).toBe("/login");
     });
-    expect(screen.getByText("Alamat Server API")).toBeTruthy();
+    expect(screen.queryByTestId("server-url-panel-toggle")).toBeNull();
     expect(screen.queryByTestId("bottom-tab-bar")).toBeNull();
     await rootView.unmount();
 

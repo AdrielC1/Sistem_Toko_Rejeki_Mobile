@@ -106,6 +106,9 @@ export default function KasirScreen() {
   const printerMode = usePrinterPrefsStore((s) => s.mode);
   const bluetoothDevice = usePrinterPrefsStore((s) => s.bluetoothDevice);
   const bluetoothPaperWidth = usePrinterPrefsStore((s) => s.bluetoothPaperWidth);
+  const setBluetoothPaperWidth = usePrinterPrefsStore(
+    (s) => s.setBluetoothPaperWidth
+  );
   const printCopies = usePrinterPrefsStore((s) => s.defaultCopies);
   const setPrintCopies = usePrinterPrefsStore((s) => s.setDefaultCopies);
 
@@ -380,11 +383,20 @@ export default function KasirScreen() {
       return;
     }
 
+    const effectiveSettings = storeSettings
+      ? {
+          ...storeSettings,
+          printerPaperWidth: bluetoothPaperWidth,
+        }
+      : {
+          storeName: "Toko Rejeki",
+          printerPaperWidth: bluetoothPaperWidth,
+        };
     const order = buildCompletedOrderPayload({
       items: activeTab.items,
       discount: activeTab.discount,
       cashierName: displayFullName,
-      storeSettings: storeSettings ?? null,
+      storeSettings: effectiveSettings,
     });
 
     waLogSentRef.current = false;
@@ -1308,15 +1320,12 @@ export default function KasirScreen() {
       <ReceiptPreviewModal
         visible={previewVisible}
         order={pendingOrder}
-        paperWidthMm={
-          printerMode === "bluetooth"
-            ? bluetoothPaperWidth
-            : (storeSettings?.printerPaperWidth ?? 58)
-        }
+        paperWidthMm={bluetoothPaperWidth}
         copies={printCopies}
         printerMode={printerMode}
         isSubmitting={isPrinting}
         onChangeCopies={setPrintCopies}
+        onChangePaperWidth={setBluetoothPaperWidth}
         onClose={() => setPreviewVisible(false)}
         onConfirmPrint={() => {
           if (pendingOrder && pendingOrderTabId) {
