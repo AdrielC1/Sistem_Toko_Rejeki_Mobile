@@ -6,12 +6,12 @@
     {
       "number": "1",
       "name": "Auth, LAN Transport Spike & Role-Protected Shell",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "2",
       "name": "Offline SQLite Catalog, Sync Engine & Health Header",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "3",
@@ -32,7 +32,7 @@
   "next": {
     "command": "/gsd-progress --next",
     "label": "Advance to the next step",
-    "reason": "Phase 1 of 5 · 0% · executing"
+    "reason": "Phase 2 of 5 · 20% · executing"
   },
-  "updated_at": "2026-11-18T13:29:50.953Z"
+  "updated_at": "2026-11-19T02:14:58.612Z"
 }

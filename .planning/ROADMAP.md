@@ -12,7 +12,7 @@ Apps Toko Rejeki Mobile delivers an offline-resilient Expo + Expo Router + TypeS
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Auth, LAN Transport Spike & Role-Protected Shell** - Validate `pos_session` cold-kill persistence and LAN cleartext networking, and ship Server URL setup, login/logout, and the 4-tab Velocity Blue RBAC shell
+- [x] **Phase 1: Auth, LAN Transport Spike & Role-Protected Shell** - Validate `pos_session` cold-kill persistence and LAN cleartext networking, and ship Server URL setup, login/logout, and the 4-tab Velocity Blue RBAC shell (completed 2026-11-19)
 - [ ] **Phase 2: Offline SQLite Catalog, Sync Engine & Health Header** - Persist products, categories, units, and store settings in WAL SQLite with foreground delta/full sync, global health status header, and manual sync controls
 - [ ] **Phase 3: Kasir Mobile POS & Multi-Mode Thermal Checkout** - Deliver `Katalog`/`Nota` checkout with multi-tab carts, wholesale/Open Price math, no-Kembalian web-parity flow, receipt preview, Server `/api/print`, and direct Bluetooth ESC/POS or Built-in/System HP printing
 - [ ] **Phase 4: Produk & Pesanan Aktif (List → Detail Flows & CRUD)** - Ship searchable/sortable `Produk` list → `Detail Produk` + online `admin`/`owner` CRUD/Trash and local `Pesanan Aktif` list + live tab badge → `Detail Pesanan` resume flow
@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. User can sign out via a confirmation modal calling fail-safe `POST /api/auth/logout` (clearing local session state even when offline) and return cleanly to Login (`AUTH-04`).
   5. Logging in as `kasir`, `admin`, or `owner` enforces `<Stack.Protected>` role guards (`kasir` restricted to read-only catalog policy; `admin`/`owner` access enabled) and resets navigation history cleanly on account switch (`NAV-04`).
 **Verification / Research Flag**: CRITICAL — On-Device Auth/Cookie Cold-Kill Spike & LAN Cleartext Config. Must validate `pos_session` `httpOnly` cookie survival across process kills and offline relaunch on physical Android/iOS (comparing `expo/fetch` `Set-Cookie` capture into `expo-secure-store` vs RN `fetch` `credentials: "include"`), configure `app.config.ts` (`expo-build-properties` `usesCleartextTraffic: true`, iOS `NSAllowsLocalNetworking` & `NSLocalNetworkUsageDescription`), verify strictly on emulator/device (never Expo Web where `sec-fetch-site` triggers `403`), and consult the user before modifying `Apps_Toko_Rejeki` if a Bearer opt-in fallback or `expo-dev-client` cookie manager is required.
-**Plans:** 6/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 **Wave 1**
@@ -65,7 +65,32 @@ Plans:
   3. A persistent global status header across the 4 tabs reflects live database connectivity (`Online`, `Standby Read-Only`, `Offline` from `/api/health`) and current local catalog sync state (`NAV-03`).
   4. User can inspect sync timestamps and cached record counts inside `Pengaturan` and manually trigger `Cek Pembaruan (Delta)`, `Sinkronisasi Penuh`, and `Reset Cache Lokal` (`SYNC-04`).
 **Verification / Research Flag**: Verify delta sync strictly persists server-returned `server_time` + persistent `client_id` UUID (never phone `Date.now()`), enforces UTC+7-safe 10:00 WIB & >48h full-sync gates (cleaning up hard-deleted items), serializes SQLite writes via `WAL` + `busy_timeout = 5000` + `syncMutex`, and caches full `StoreSettings` only after authentication.
-**Plans**: TBD
+**Plans:** 8 plans
+
+Plans:
+**Wave 1**
+- [ ] 02-01-PLAN.md — `D-12` `one-way` blocking-human gate, idempotent PostgreSQL `mini_*` twin schema (`mini_catalog_migration.sql`, `production_full_migration.sql`), and `?scope=mini` on `GET /api/sync/full` + `GET /api/sync/delta` (`SYNC-01`–`SYNC-03`)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 02-02-PLAN.md — Catalog/Dual-URL types, `TOKENS.colors` UI-SPEC additions, Dual-URL storage (`pos_server_config_v2` with explicit nullable cleared support), and Smart Auto LAN→Cloud failover API transport (`apiClient`, `healthApi`, `syncApi`, `authApi`) (`SYNC-01`–`SYNC-03`)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 02-03-PLAN.md — Dual-URL `AuthContext` upgrade, Wave 0 `node:sqlite` Jest harness (`__tests__/setup.ts`), & updated transport/URL-routed `authContext` test suites (`SYNC-01`–`SYNC-03`)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 02-04-PLAN.md — `expo-sqlite` WAL database, FIFO `syncMutex`, fail-closed `kasir` `costPrice` isolation (`catalogRepo`), bounded `syncMetaRepo`, UTC+7 `syncEngine` (`10:00 WIB` & `>48h` gates), & `node:sqlite` Jest suites (`SYNC-01`–`SYNC-04`)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 02-05-PLAN.md — `SystemStatusContext` (`/api/health` 10s + backoff + 30s LAN re-probe), `SyncEngineContext` (5s foreground delta + backoff + initial retry), wired `(app)/_layout.tsx`, & lifecycle tests (`NAV-03`, `SYNC-02`–`SYNC-04`)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 02-06-PLAN.md — Velocity Blue `EmptyStateCard` (`iconBadgeVariant`), `TabScreenHeader` status sub-bar, `InitialSyncBanner`, `ResetCacheConfirmModal`, `SyncControlCard`, & `systemStatusHeader`/`pengaturanSync` tests (`NAV-03`, `SYNC-02`, `SYNC-04`)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 02-07-PLAN.md — Dual-URL `ServerUrlPanel` + `login.tsx`, `pengaturan.tsx` (`SyncControlCard`, active route badges, `ResetCacheConfirmModal`), `kasir.tsx`/`produk.tsx` states, & `loginScreen`/`tabScreens` regression (`NAV-03`, `SYNC-02`, `SYNC-04`)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 02-08-PLAN.md — Full mobile + backend automated pre-flight and Live Device / Emulator Phase 2 Verification Spike (`02-SPIKE-EVIDENCE.md`) (`NAV-03`, `SYNC-01`–`SYNC-04`)
 **UI hint**: yes
 
 ### Phase 3: Kasir Mobile POS & Multi-Mode Thermal Checkout
@@ -119,8 +144,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Auth, LAN Transport Spike & Role-Protected Shell | 5/6 | In Progress | - |
-| 2. Offline SQLite Catalog, Sync Engine & Health Header | 0/0 | Not started | - |
+| 1. Auth, LAN Transport Spike & Role-Protected Shell | 6/6 | Complete    | 2026-11-19 |
+| 2. Offline SQLite Catalog, Sync Engine & Health Header | 0/8 | Planned | - |
 | 3. Kasir Mobile POS & Multi-Mode Thermal Checkout | 0/0 | Not started | - |
 | 4. Produk & Pesanan Aktif (List → Detail Flows & CRUD) | 0/0 | Not started | - |
 | 5. Pengaturan Hub, Profile/About & Owner Administration | 0/0 | Not started | - |
