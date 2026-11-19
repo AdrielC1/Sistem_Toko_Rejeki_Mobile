@@ -8,6 +8,10 @@ import {
   ReceiptText,
   Settings,
 } from "lucide-react-native";
+import {
+  selectHeldOrdersCount,
+  usePosCartStore,
+} from "@/store/posCartStore";
 import { FONT_FAMILY, TOKENS } from "@/theme/tokens";
 
 function VelocityTabBar({
@@ -50,6 +54,15 @@ function VelocityTabBar({
         const inactiveTintColor =
           options.tabBarInactiveTintColor ?? TOKENS.colors.muted;
         const tintColor = focused ? activeTintColor : inactiveTintColor;
+        const rawBadge = options.tabBarBadge;
+        const badgeText =
+          typeof rawBadge === "number"
+            ? rawBadge > 99
+              ? "99+"
+              : String(rawBadge)
+            : typeof rawBadge === "string"
+              ? rawBadge
+              : null;
 
         const onPress = () => {
           const event = emitter.emit({
@@ -96,6 +109,14 @@ function VelocityTabBar({
                 color: tintColor,
                 size: 20,
               })}
+              {badgeText ? (
+                <View
+                  testID={`tab-badge-${route.name}`}
+                  style={styles.badgeBubble}
+                >
+                  <Text style={styles.badgeBubbleText}>{badgeText}</Text>
+                </View>
+              ) : null}
             </View>
             <Text
               numberOfLines={1}
@@ -122,6 +143,7 @@ export const unstable_settings = {
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(insets.bottom, TOKENS.spacing.sm);
+  const heldOrdersCount = usePosCartStore(selectHeldOrdersCount);
 
   return (
     <Tabs
@@ -167,7 +189,11 @@ export default function TabsLayout() {
         options={{
           title: "Pesanan",
           tabBarButtonTestID: "tab-pesanan",
-          tabBarAccessibilityLabel: "Pesanan",
+          tabBarAccessibilityLabel:
+            heldOrdersCount > 0
+              ? `Pesanan (${heldOrdersCount} nota tertunda)`
+              : "Pesanan",
+          tabBarBadge: heldOrdersCount > 0 ? heldOrdersCount : undefined,
           tabBarIcon: ({ color, size }) => (
             <ReceiptText size={size} color={color} />
           ),
@@ -228,9 +254,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
+    position: "relative",
   },
   iconPillActive: {
     backgroundColor: TOKENS.colors.primaryFixed,
+  },
+  badgeBubble: {
+    position: "absolute",
+    top: -4,
+    right: 0,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: TOKENS.spacing.xs,
+    borderRadius: 999,
+    backgroundColor: TOKENS.colors.destructive,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeBubbleText: {
+    fontFamily: FONT_FAMILY.monoSemiBold,
+    fontSize: TOKENS.typography.label,
+    lineHeight: TOKENS.typography.label,
+    color: TOKENS.colors.onPrimary,
   },
   tabLabel: {
     fontSize: TOKENS.typography.label,
