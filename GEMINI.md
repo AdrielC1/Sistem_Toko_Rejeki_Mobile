@@ -167,19 +167,15 @@ Architecture not yet mapped. Follow existing patterns found in the codebase.
 No project skills found. Add skills to any of: `.agents/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
 <!-- GSD:skills-end -->
 
-<!-- GSD:workflow-start source:GSD defaults -->
+<!-- GSD:workflow-start source:user-override -->
 
-## GSD Workflow Enforcement
+## GSD Workflow Policy (Opsional / Atas Instruksi User)
 
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+Penggunaan workflow GSD **tidak wajib** dijalankan sebelum menggunakan `Edit`, `Write`, atau tool pengubah file lainnya.
 
-Use these entry points:
-- `/gsd-fast` for a trivial task inline, with no subagents and no PLAN.md
-- `/gsd-quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd-debug` for investigation and bug fixing
-- `/gsd-execute-phase` for planned phase work
-
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+- Agent dapat langsung mengerjakan perubahan kode, migrasi, konfigurasi, atau perbaikan secara langsung sesuai permintaan user tanpa harus memulai command GSD terlebih dahulu.
+- Workflow dan command GSD (`/gsd-fast`, `/gsd-quick`, `/gsd-debug`, `/gsd-execute-phase`, `/gsd-plan-phase`, dll.) **hanya digunakan apabila diminta atau diinstruksikan langsung oleh user**.
+- Aturan proyek lainnya pada dokumen ini (seperti tech stack, kompatibilitas backend `Apps_Toko_Rejeki`, kepatuhan rubrik, dan ketahanan offline) tetap berlaku.
 <!-- GSD:workflow-end -->
 
 <!-- GSD:profile-start -->
