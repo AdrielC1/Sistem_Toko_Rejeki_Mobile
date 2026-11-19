@@ -356,12 +356,6 @@ const styles = StyleSheet.create({
     borderColor: TOKENS.colors.borderSubtle,
     borderRadius: TOKENS.radii.lg,
     padding: TOKENS.spacing.lg,
-    // Subtle surface marker against #f9f9ff viewport canvas
-    shadowColor: TOKENS.colors.onSurface,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
   primaryButton: {
     minHeight: TOKENS.spacing.touchTarget,

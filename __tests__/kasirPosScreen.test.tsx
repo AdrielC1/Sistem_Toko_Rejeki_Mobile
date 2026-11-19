@@ -109,11 +109,11 @@ describe("KasirScreen POS workflow, wholesale pricing, preview & intervention", 
     await fireEvent.press(screen.getByTestId("kasir-floating-cart-bar"));
     expect(screen.getByTestId("kasir-checkout-button")).toBeTruthy();
 
-    // Update quantity via direct TextInput to hit wholesale tier (>= 5)
-    await fireEvent.changeText(
-      screen.getByTestId("cart-qty-input-p-beras-u-kg"),
-      "5"
-    );
+    // Update quantity via CartItemQuantityModal to hit wholesale tier (>= 5)
+    await fireEvent.press(screen.getByTestId("cart-qty-input-p-beras-u-kg"));
+    expect(screen.getByTestId("kasir-qty-modal")).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("qty-modal-input"), "5");
+    await fireEvent.press(screen.getByTestId("qty-modal-save-button"));
     expect(screen.getByTestId("kasir-grand-total").props.children).toBe(
       "Rp 70.000"
     );

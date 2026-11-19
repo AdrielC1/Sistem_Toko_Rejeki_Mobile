@@ -85,32 +85,35 @@ export default function PesananScreen() {
                 onPress={() => {
                   router.push(`/pesanan/${tab.id}`);
                 }}
-                style={({ pressed }) => [pressed && styles.pressedCard]}
               >
-                <SurfaceCard style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.titleRow}>
-                      <Text style={styles.orderTitle}>{tab.label}</Text>
-                      {isActive ? (
-                        <Text style={styles.activeBadge}>Aktif di Kasir</Text>
-                      ) : null}
+                {({ pressed }) => (
+                  <SurfaceCard
+                    style={[styles.card, pressed && styles.pressedCard]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.titleRow}>
+                        <Text style={styles.orderTitle}>{tab.label}</Text>
+                        {isActive ? (
+                          <Text style={styles.activeBadge}>Aktif di Kasir</Text>
+                        ) : null}
+                      </View>
+                      <ChevronRight size={18} color={TOKENS.colors.outline} />
                     </View>
-                    <ChevronRight size={18} color={TOKENS.colors.outline} />
-                  </View>
 
-                  <Text style={styles.timeText}>
-                    {`Dibuat: ${formatWibDateTime(tab.createdAt)}`}
-                  </Text>
+                    <Text style={styles.timeText}>
+                      {`Dibuat: ${formatWibDateTime(tab.createdAt)}`}
+                    </Text>
 
-                  <View style={styles.footerRow}>
-                    <Text style={styles.countText}>
-                      {`${summary.itemCount} jenis · ${summary.totalQuantity} item`}
-                    </Text>
-                    <Text style={styles.totalText}>
-                      {formatRupiah(summary.grandTotal)}
-                    </Text>
-                  </View>
-                </SurfaceCard>
+                    <View style={styles.footerRow}>
+                      <Text style={styles.countText}>
+                        {`${summary.itemCount} jenis · ${summary.totalQuantity} item`}
+                      </Text>
+                      <Text style={styles.totalText}>
+                        {formatRupiah(summary.grandTotal)}
+                      </Text>
+                    </View>
+                  </SurfaceCard>
+                )}
               </Pressable>
             );
           })
@@ -135,7 +138,8 @@ const styles = StyleSheet.create({
     gap: TOKENS.spacing.sm,
   },
   pressedCard: {
-    opacity: 0.85,
+    borderColor: TOKENS.colors.primary,
+    backgroundColor: TOKENS.colors.surfaceContainerLow,
   },
   card: {
     gap: TOKENS.spacing.xs,

@@ -202,104 +202,110 @@ export default function ProdukScreen() {
         onPress={() => {
           router.push(`/produk/${item.id}`);
         }}
-        style={({ pressed }) => [pressed && styles.pressedCard]}
       >
-        <SurfaceCard style={styles.productCard}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.cardHeaderLeft}>
-              <View style={styles.titleLine}>
-                <Text numberOfLines={2} style={styles.productName}>
-                  {item.name}
+        {({ pressed }) => (
+          <SurfaceCard
+            style={[
+              styles.productCard,
+              pressed && styles.productCardPressed,
+            ]}
+          >
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardHeaderLeft}>
+                <View style={styles.titleLine}>
+                  <Text numberOfLines={2} style={styles.productName}>
+                    {item.name}
+                  </Text>
+                  {item.categoryName ? (
+                    <Text style={styles.categoryChip}>{item.categoryName}</Text>
+                  ) : null}
+                  {!item.isActive ? (
+                    <Text style={styles.inactiveChip}>Nonaktif</Text>
+                  ) : null}
+                </View>
+                <Text style={styles.skuLine}>
+                  {`SKU: ${item.sku || "-"}${
+                    item.barcode ? ` · BC: ${item.barcode}` : ""
+                  }`}
                 </Text>
-                {item.categoryName ? (
-                  <Text style={styles.categoryChip}>{item.categoryName}</Text>
-                ) : null}
-                {!item.isActive ? (
-                  <Text style={styles.inactiveChip}>Nonaktif</Text>
-                ) : null}
               </View>
-              <Text style={styles.skuLine}>
-                {`SKU: ${item.sku || "-"}${
-                  item.barcode ? ` · BC: ${item.barcode}` : ""
-                }`}
-              </Text>
-            </View>
 
-            {roleCapabilities.canEditProducts ? (
-              <View style={styles.cardActionButtons}>
-                <Pressable
-                  testID={`produk-card-edit-${item.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit produk ${item.name}`}
-                  disabled={!canWriteOnline}
-                  onPress={(e) => {
-                    e.stopPropagation?.();
-                    router.push(`/produk/form?id=${item.id}`);
-                  }}
-                  style={({ pressed }) => [
-                    styles.cardEditBtn,
-                    !canWriteOnline && styles.disabledBtn,
-                    pressed && canWriteOnline && styles.pressedCard,
-                  ]}
-                >
-                  <Pencil size={16} color={TOKENS.colors.primary} />
-                </Pressable>
-                <Pressable
-                  testID={`produk-card-delete-${item.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Hapus produk ${item.name}`}
-                  disabled={!canWriteOnline}
-                  onPress={(e) => {
-                    e.stopPropagation?.();
-                    setDeleteTarget(item);
-                  }}
-                  style={({ pressed }) => [
-                    styles.cardDeleteBtn,
-                    !canWriteOnline && styles.disabledBtn,
-                    pressed && canWriteOnline && styles.pressedCard,
-                  ]}
-                >
-                  <Trash2 size={16} color={TOKENS.colors.destructive} />
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.variantBox}>
-            <Text style={styles.boxHeading}>VARIAN SATUAN &amp; HARGA</Text>
-            <View style={styles.pillWrap}>
-              {unitBadges.map((badge) => (
-                <Text
-                  key={badge.key}
-                  style={[
-                    styles.variantPill,
-                    badge.isUnsold && styles.variantPillUnsold,
-                  ]}
-                >
-                  {badge.label}
-                </Text>
-              ))}
-            </View>
-          </View>
-
-          {item.wholesaleTiers.length > 0 ? (
-            <View style={styles.wholesaleBox}>
-              <Text style={styles.wholesaleHeading}>
-                HARGA GROSIR BERTINGKAT
-              </Text>
-              <View style={styles.pillWrap}>
-                {item.wholesaleTiers.map((tier, idx) => (
-                  <Text
-                    key={`${tier.minQty}-${idx}`}
-                    style={styles.wholesalePill}
+              {roleCapabilities.canEditProducts ? (
+                <View style={styles.cardActionButtons}>
+                  <Pressable
+                    testID={`produk-card-edit-${item.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit produk ${item.name}`}
+                    disabled={!canWriteOnline}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      router.push(`/produk/form?id=${item.id}`);
+                    }}
+                    style={({ pressed: editPressed }) => [
+                      styles.cardEditBtn,
+                      !canWriteOnline && styles.disabledBtn,
+                      editPressed && canWriteOnline && styles.pressedCard,
+                    ]}
                   >
-                    {`≥${tier.minQty} ${tier.unitName ?? baseUnitName}: ${formatRupiah(tier.price)}`}
+                    <Pencil size={16} color={TOKENS.colors.primary} />
+                  </Pressable>
+                  <Pressable
+                    testID={`produk-card-delete-${item.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Hapus produk ${item.name}`}
+                    disabled={!canWriteOnline}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      setDeleteTarget(item);
+                    }}
+                    style={({ pressed: delPressed }) => [
+                      styles.cardDeleteBtn,
+                      !canWriteOnline && styles.disabledBtn,
+                      delPressed && canWriteOnline && styles.pressedCard,
+                    ]}
+                  >
+                    <Trash2 size={16} color={TOKENS.colors.destructive} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.variantBox}>
+              <Text style={styles.boxHeading}>VARIAN SATUAN &amp; HARGA</Text>
+              <View style={styles.pillWrap}>
+                {unitBadges.map((badge) => (
+                  <Text
+                    key={badge.key}
+                    style={[
+                      styles.variantPill,
+                      badge.isUnsold && styles.variantPillUnsold,
+                    ]}
+                  >
+                    {badge.label}
                   </Text>
                 ))}
               </View>
             </View>
-          ) : null}
-        </SurfaceCard>
+
+            {item.wholesaleTiers.length > 0 ? (
+              <View style={styles.wholesaleBox}>
+                <Text style={styles.wholesaleHeading}>
+                  HARGA GROSIR BERTINGKAT
+                </Text>
+                <View style={styles.pillWrap}>
+                  {item.wholesaleTiers.map((tier, idx) => (
+                    <Text
+                      key={`${tier.minQty}-${idx}`}
+                      style={styles.wholesalePill}
+                    >
+                      {`≥${tier.minQty} ${tier.unitName ?? baseUnitName}: ${formatRupiah(tier.price)}`}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+          </SurfaceCard>
+        )}
       </Pressable>
     );
   };
@@ -615,7 +621,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: TOKENS.colors.surfaceCard,
     borderWidth: 1,
-    borderColor: TOKENS.colors.outline,
+    borderColor: TOKENS.colors.borderSubtle,
     borderRadius: TOKENS.radii.md,
     paddingHorizontal: TOKENS.spacing.sm,
     gap: TOKENS.spacing.xs,
@@ -711,6 +717,10 @@ const styles = StyleSheet.create({
   productCard: {
     marginBottom: TOKENS.spacing.sm,
     gap: TOKENS.spacing.xs,
+  },
+  productCardPressed: {
+    borderColor: TOKENS.colors.primary,
+    backgroundColor: TOKENS.colors.surfaceContainerLow,
   },
   cardHeaderRow: {
     flexDirection: "row",

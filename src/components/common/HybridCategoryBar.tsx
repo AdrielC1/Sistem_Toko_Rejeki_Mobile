@@ -336,16 +336,17 @@ export function HybridCategoryBar({
         <Pressable
           testID={`${testIDPrefix}-category-all`}
           accessibilityRole="button"
+          accessibilityState={{ selected: selectedCategoryId === "all" }}
           onPress={() => onSelectCategory("all")}
           style={[
             styles.textChip,
-            selectedCategoryId === "all" && styles.textChipDarkActive,
+            selectedCategoryId === "all" && styles.textChipPrimaryActive,
           ]}
         >
           <Text
             style={[
               styles.textChipLabel,
-              selectedCategoryId === "all" && styles.textChipDarkLabelActive,
+              selectedCategoryId === "all" && styles.textChipPrimaryLabelActive,
             ]}
           >
             Semua Produk
@@ -418,13 +419,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   allCategoriesTrigger: {
+    height: 32,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 7,
     borderRadius: TOKENS.radii.sm,
     backgroundColor: TOKENS.colors.primary,
+    borderWidth: 1,
+    borderColor: TOKENS.colors.primary,
   },
   allCategoriesTriggerText: {
     fontFamily: FONT_FAMILY.bodySemiBold,
@@ -433,20 +437,19 @@ const styles = StyleSheet.create({
     color: TOKENS.colors.onPrimary,
   },
   textChip: {
+    height: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 10,
-    paddingVertical: 7,
     borderRadius: TOKENS.radii.sm,
     backgroundColor: TOKENS.colors.surfaceCard,
     borderWidth: 1,
     borderColor: TOKENS.colors.borderSubtle,
   },
-  textChipDarkActive: {
-    backgroundColor: TOKENS.colors.onSurface,
-    borderColor: TOKENS.colors.onSurface,
-  },
   textChipPrimaryActive: {
     backgroundColor: TOKENS.colors.primaryFixed,
-    borderColor: TOKENS.colors.primary,
+    borderColor: "#93b8f8",
   },
   textChipLabel: {
     fontFamily: FONT_FAMILY.bodySemiBold,
@@ -454,23 +457,21 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: TOKENS.colors.onSurfaceVariant,
   },
-  textChipDarkLabelActive: {
-    color: TOKENS.colors.onPrimary,
-  },
   textChipPrimaryLabelActive: {
     color: TOKENS.colors.onPrimaryFixed,
   },
   activeNonPinnedPill: {
+    height: 32,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
     paddingLeft: 10,
     paddingRight: 6,
-    paddingVertical: 6,
     borderRadius: TOKENS.radii.sm,
     backgroundColor: TOKENS.colors.primaryFixed,
     borderWidth: 1,
-    borderColor: TOKENS.colors.primary,
+    borderColor: "#93b8f8",
   },
   activeNonPinnedText: {
     fontFamily: FONT_FAMILY.bodySemiBold,
@@ -627,8 +628,8 @@ const styles = StyleSheet.create({
     borderColor: TOKENS.colors.borderSubtle,
   },
   allOptionRowActive: {
-    backgroundColor: TOKENS.colors.onSurface,
-    borderColor: TOKENS.colors.onSurface,
+    backgroundColor: TOKENS.colors.primaryFixed,
+    borderColor: TOKENS.colors.primary,
   },
   allOptionText: {
     fontFamily: FONT_FAMILY.bodySemiBold,
@@ -637,7 +638,7 @@ const styles = StyleSheet.create({
     color: TOKENS.colors.onSurface,
   },
   allOptionTextActive: {
-    color: TOKENS.colors.onPrimary,
+    color: TOKENS.colors.onPrimaryFixed,
   },
   emptyCatState: {
     paddingVertical: TOKENS.spacing.lg,

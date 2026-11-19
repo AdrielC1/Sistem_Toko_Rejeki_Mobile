@@ -245,24 +245,37 @@ export default function PesananDetailScreen() {
         onRequestClose={() => setConfirmDeleteOpen(false)}
       >
         <View style={styles.backdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setConfirmDeleteOpen(false)}
+          />
           <View style={styles.modalCard}>
-            <Text style={styles.sectionHeading}>
-              {`Hapus ${tab?.label ?? "Nota"}?`}
-            </Text>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalTrashBadge}>
+                <Trash2 size={20} color={TOKENS.colors.destructive} />
+              </View>
+              <Text style={styles.modalTitleText}>
+                {`Hapus ${tab?.label ?? "Nota"}?`}
+              </Text>
+            </View>
             <Text style={styles.metaText}>
-              Semua item di nota tertunda ini akan dihapus dari perangkat.
+              Seluruh barang dalam nota tertunda ini akan dihapus dari perangkat.
             </Text>
-            <SecondaryButton
-              testID="pesanan-delete-confirm-button"
-              variant="danger"
-              label="Ya, Hapus Nota"
-              onPress={handleConfirmDelete}
-            />
-            <SecondaryButton
-              variant="tonal"
-              label="Batal"
-              onPress={() => setConfirmDeleteOpen(false)}
-            />
+            <View style={styles.modalActionsRow}>
+              <SecondaryButton
+                variant="tonal"
+                label="Batal"
+                onPress={() => setConfirmDeleteOpen(false)}
+                style={styles.modalBtnHalf}
+              />
+              <SecondaryButton
+                testID="pesanan-delete-confirm-button"
+                variant="danger"
+                label="Ya, Hapus Nota"
+                onPress={handleConfirmDelete}
+                style={styles.modalBtnHalf}
+              />
+            </View>
           </View>
         </View>
       </Modal>
@@ -437,5 +450,34 @@ const styles = StyleSheet.create({
     borderRadius: TOKENS.radii.lg,
     padding: TOKENS.spacing.lg,
     gap: TOKENS.spacing.md,
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  modalTrashBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: TOKENS.radii.md,
+    backgroundColor: TOKENS.colors.errorContainer,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalTitleText: {
+    flex: 1,
+    fontFamily: FONT_FAMILY.heading,
+    fontSize: 17,
+    lineHeight: 22,
+    color: TOKENS.colors.onSurface,
+  },
+  modalActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingTop: 4,
+  },
+  modalBtnHalf: {
+    flex: 1,
   },
 });
