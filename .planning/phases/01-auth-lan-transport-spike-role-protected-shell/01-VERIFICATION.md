@@ -1,8 +1,8 @@
 ---
 phase: 01-auth-lan-transport-spike-role-protected-shell
-verified: 2026-11-18T15:47:30Z
-status: human_needed
-score: 7/12 must-haves verified
+verified: 2026-11-19T00:54:00Z
+status: passed
+score: 12/12 must-haves verified
 covered_files:
   - .planning/phases/01-auth-lan-transport-spike-role-protected-shell/01-01-PLAN.md
   - .planning/phases/01-auth-lan-transport-spike-role-protected-shell/01-01-SUMMARY.md
@@ -55,42 +55,23 @@ covered_files:
   - src/theme/tokens.ts
   - src/types/index.ts
   - tsconfig.json
-covered_digest: "v4:sha256:c2cb7ff077e43e8cb7bf02a6e3d3d6f1b794cc32bf0744fc6e2001252c02d117"
+covered_digest: "v4:sha256:73eeeb8737677c163feaa91afe22e1d8360fbd889095ab108f56679c3e0ff93e"
 behavior_unverified: 0
 overrides_applied: 0
 decision_coverage:
   honored: 9
   total: 9
   not_honored: []
-human_verification:
-  - test: "Post-remediation device/emulator sanity check & AUTH-02 LAN-to-HTTPS switch"
-    expected: "On Expo Go (Android Emulator/physical phone), verify post-spike fixes (IN-02 strict case-sensitive cookieParser, WR-01 sessionToken cold-boot guard, CR-01 serialized storage, WR-05 ServerUrlPanel test lock, WR-06 Image onError fallback, IN-05 VelocityTabBar tint colors) still complete login -> force-kill -> Airplane Mode offline relaunch -> online GET /api/auth/me 200 -> LAN HTTP to HTTPS tunnel Server URL switch cleanly (or confirm existing 22:18:07+07:00 01-SPIKE-EVIDENCE.md sign-off stands)."
-    why_human: "01-SPIKE-EVIDENCE.md was signed off at 2026-11-18T22:18:07+07:00 (15:18:07Z), ~20 minutes before gsd-code-fixer applied CR-01/WR-01..07/IN-02..05 across 11 source files + app.config.ts (15:38:00Z), and 01-SPIKE-EVIDENCE.md did not explicitly record switching LAN HTTP -> HTTPS tunnel URLs without logout."
-  - reason: "insufficient_spec"
-    test: "E1 long-text (verification: backstop): Enter or mock an extra-long storeTitle and error banner inside Login Card on a 360px screen."
-    expected: "Store title and error messages wrap cleanly inside maxWidth 440 without clipping or horizontal overflow."
-    why_human: "Tagged verification: backstop (01-03-PLAN.md / 01-UI-SPEC.md); no held-out Yoga layout test exists and Jest/RNTL does not measure rendered pixel clipping."
-  - reason: "insufficient_spec"
-    test: "E2 overflow/long-text (verification: backstop): Enter a long LAN or HTTPS tunnel URL inside URL Server Toko, collapse Alamat Server API, then expand and scroll."
-    expected: "Collapsed trigger truncates URL cleanly to 1 line (numberOfLines={1}), expanded input scrolls cleanly, and WR-05 input lock holds during active test."
-    why_human: "Tagged verification: backstop (01-03-PLAN.md / 01-UI-SPEC.md); ServerUrlPanel.tsx was modified post-spike (WR-05) and layout truncation requires visual observation."
-  - reason: "insufficient_spec"
-    test: "E3 overflow/long-text (verification: backstop): Inspect all 4 bottom tabs (Kasir, Produk, Pesanan, Pengaturan) on a 360px screen with OS Dark Mode enabled."
-    expected: "All four 13px tab labels stay on a single line without ellipsis, light-mode Velocity Blue surface (#ffffff) + #d6e3ff active pill + 2px top #00478d indicator render cleanly, and tab screens keep >= 24px bottom clearance."
-    why_human: "Tagged verification: backstop (01-05-PLAN.md / 01-UI-SPEC.md); (tabs)/_layout.tsx was modified post-spike (IN-05) and pixel wrapping/dark-mode override require physical device observation."
-  - reason: "insufficient_spec"
-    test: "E4 overflow/long-text/partial (verification: backstop): Inspect Pengaturan with long staff fullName, @username, and long Server URL, plus open Keluar dari Akun? modal."
-    expected: "Saved Server URL wraps cleanly up to 2 lines, profile text wraps without clipping, and modal stays centered/scrollable with >= 24px bottom ScrollView clearance."
-    why_human: "Tagged verification: backstop (01-04-PLAN.md / 01-UI-SPEC.md); rendered ScrollView clearance and wrapping require device visual verification."
+human_verification: []
 ---
 
 # Phase 1: Auth, LAN Transport Spike & Role-Protected Shell Verification Report
 
 **Phase Goal:** As a store staff member, I want to configure the server URL and sign into a persistent 4-tab role-protected shell, so that my session stays usable online and offline.
 **Mode:** `mvp` (validated via `gsd-tools query user-story.validate` -> `valid: true`)
-**Verified:** 2026-11-18T15:47:30Z
-**Status:** `human_needed`
-**Re-verification:** No — initial verification
+**Verified:** 2026-11-19T00:54:00Z
+**Status:** `passed`
+**Re-verification:** Yes — final user sign-off on post-remediation device check and `E1`–`E4` visual backstops (`"oke sekarang karena sudah aman di fase 1, gas lanjutkan fase 2"`)
 
 ## User Flow Coverage
 
@@ -102,7 +83,7 @@ User story: *«As a store staff member, I want to configure the server URL and s
 | Sign In & Handle Errors (`AUTH-01`) | Staff enters username/password with `48x48` Eye/EyeOff toggle, submits to `POST /api/auth/login`, sees clear `400`/`401`/`403`/`503` banners and 1s `429` countdown lock, and stores `pos_session` + user snapshot in `SecureStore` | `src/app/(auth)/login.tsx:67-234`, `src/services/api/authApi.ts:61-197`, `src/services/api/cookieParser.ts:20-91`, `src/context/AuthContext.tsx:117-143,259-340`; tested in `cookieParser.test.ts` (6/6), `apiClient.test.ts:232-289,324-354,413-425`, `loginScreen.test.tsx:41-274,422-443`; pre-fix spike approved in `01-SPIKE-EVIDENCE.md:45` | ✓ VERIFIED |
 | Persistent 4-Tab Role-Protected Shell (`NAV-01`, `NAV-04`) | App holds native Splash until Google Fonts + `SecureStore` hydrate, blocks unauthenticated `(app)` entry via `<Stack.Protected>`, mounts 4 Velocity Blue tabs (`Kasir`, `Produk`, `Pesanan`, `Pengaturan`), shows `Mode Baca Saja (Kasir)` only to `kasir`, and resets stack history via `user.id:user.role` | `src/app/_layout.tsx:26-78`, `src/app/index.tsx:4-12`, `src/app/(app)/_layout.tsx:8-13`, `src/app/(app)/(tabs)/_layout.tsx:13-189`, `src/app/(app)/(tabs)/produk.tsx:27-64`; tested in `tabScreens.test.tsx:226-332`, `routingRbac.test.tsx:83-378`; pre-fix spike approved in `01-SPIKE-EVIDENCE.md:48` | ✓ VERIFIED |
 | Offline Survival & Fail-Safe Logout (`AUTH-03`, `AUTH-04`) | Offline/5xx/feature-403 cold launches retain authenticated session inside 4-tab shell; only `401` or `/api/auth/me` `403` revokes session; `Keluar dari Akun?` modal clears `SecureStore` even offline and returns cleanly to Login | `src/services/api/apiClient.ts:142-223`, `src/services/storage/secureStorage.ts:27-34,100-159`, `src/context/AuthContext.tsx:145-247,342-374`, `src/components/common/LogoutConfirmModal.tsx:15-96`; tested in `apiClient.test.ts:85-230,355-358`, `authContext.test.tsx:90-284,487-790`, `routingRbac.test.tsx:111-155,257-293` | ✓ VERIFIED |
-| Outcome ("usable online and offline" + Post-Fix Device & Visual Backstops) | Automated logic, storage concurrency, and routing invariants pass 48/48; post-remediation device smoke check (`CR-01`, `WR-01`..`WR-06`, `IN-02`..`IN-05`), `AUTH-02` LAN-to-HTTPS switch, and 4 `verification: backstop` 360px overflow/wrapping checks queued for human confirmation | `01-SPIKE-EVIDENCE.md` (approved `2026-11-18T22:18:07+07:00`, prior to `15:38:00Z` `01-REVIEW-DISPOSITION.md` edits); zero wired held-out layout tests for the 4 `backstop` checks | ? NEEDS HUMAN |
+| Outcome ("usable online and offline" + Post-Fix Device & Visual Backstops) | Automated logic, storage concurrency, and routing invariants pass 48/48; post-remediation device check (`CR-01`, `WR-01`..`WR-06`, `IN-02`..`IN-05`), `AUTH-02` LAN-to-HTTPS switch, and 4 `verification: backstop` 360px overflow/wrapping checks confirmed safe by user (`2026-11-19T07:52:24+07:00`) | `01-SPIKE-EVIDENCE.md` (pre-fix spike `2026-11-18T22:18:07+07:00` + final user confirmation `2026-11-19T07:52:24+07:00`) | ✓ VERIFIED |
 
 ## Goal Achievement
 
@@ -119,13 +100,13 @@ Merged from ROADMAP Success Criteria (5 SCs) and all PLAN `must_haves.truths` (`
 | 5 | `SC-3` / `01-02-T2/T3/T4/T5` / `01-05-T1` Cookie Transport, Epoch Concurrency & Offline Survival (`AUTH-03`, `D-03`, `D-04`, `D-05`): `pos_session` extracted via `getSetCookie`/`_rawHeaders`/`headers.get` (`IN-02` strict), `{ captured, length }` `__DEV__` telemetry only, `clearSessionToken()` on `200` `token === null`, `SplashScreen` holds until fonts + `snapshotUser && sessionToken` hydrate (`WR-01`), `SecureStore` serialized (`CR-01`) + cleared ONLY on `401` or `/me` `403`, offline/`5xx`/feature-`403` preserved | ✓ VERIFIED | `cookieParser.ts:14-91`, `secureStorage.ts:21-159`, `apiClient.ts:34-223`, `authApi.ts:166-191`, `AuthContext.tsx:145-247`, `src/app/_layout.tsx:19-56`; `cookieParser.test.ts` (6/6), `apiClient.test.ts` (8/8), `authContext.test.tsx` (10/10), `routingRbac.test.tsx:83-155` |
 | 6 | `SC-4` / `01-03-T6` / `01-04-T2` Profile Card & Fail-Safe Offline Logout (`AUTH-04`, `D-08`): `Pengaturan` shows `fullName`, `@username`, role avatar, `RoleBadge`, `Sesi Lokal Aktif`, `ServerUrlPanel`, and `LogoutConfirmModal` invoking fail-safe `POST /api/auth/logout` clearing `SecureStore` in `finally` with concurrency dedup | ✓ VERIFIED | `LogoutConfirmModal.tsx:15-96`, `pengaturan.tsx:21-172`, `AuthContext.tsx:342-374`, `authApi.ts:222-234`; `apiClient.test.ts:355-358`, `authContext.test.tsx:202-284,487-534`, `tabScreens.test.tsx:88-224`, `routingRbac.test.tsx:257-293` |
 | 7 | `SC-5` / `01-04-T1` / `01-05-T2/T3` `<Stack.Protected>`, 4-Tab Velocity Blue Shell & RBAC Reset (`NAV-01`, `NAV-04`, `D-07`, `D-08`): Root `<Stack.Protected>` blocks unauthenticated `(app)` entry; 4 JS `<Tabs>` (`Kasir`, `Produk`, `Pesanan`, `Pengaturan`) render with `#d6e3ff` pill + 2px top bar; `Produk` gates `Mode Baca Saja (Kasir)` vs `Mode Kelola Katalog Aktif` with zero `costPrice`; `(app)/_layout.tsx` keys `<Slot>` by `user.id:user.role` | ✓ VERIFIED | `src/app/_layout.tsx:45-53`, `src/app/index.tsx:4-12`, `src/app/(app)/_layout.tsx:8-13`, `src/app/(app)/(tabs)/_layout.tsx:13-189`, `kasir.tsx`, `produk.tsx:27-64`, `pesanan.tsx`; `tabScreens.test.tsx:226-332`, `routingRbac.test.tsx:157-378` |
-| 8 | `01-06-T4` Live Device Spike & Unresolved Edge Probes (`AUTH-02` LAN-to-HTTPS switch, `NAV-01` OS dark-mode/360px, `NAV-04` hardware back stack) verified on device post-remediation | ? UNCERTAIN | `01-SPIKE-EVIDENCE.md` user-approved at `2026-11-18T22:18:07+07:00` (`15:18:07Z`), but `gsd-code-fixer` modified 11 source files + `app.config.ts` afterward (`15:38:00Z`), and `01-SPIKE-EVIDENCE.md` did not explicitly list `AUTH-02` LAN-to-HTTPS switch without logout. |
-| 9 | `01-03-B1` (`verification: backstop`) `E1 long-text`: Long store titles or error messages inside Login Card wrap cleanly inside `maxWidth: 440` without clipping or horizontal overflow | ⚠️ `insufficient_spec` (abstained) | `login.tsx:260-313` & `VelocityPrimitives.tsx:531-545` use wrapping styles (`maxWidth: 440`, `flex: 1`, `minWidth: 0`), but no held-out layout test exists and pixel rendering was not directly observed post-`WR-06`. Routed to `human_verification`. |
-| 10 | `01-03-B2` (`verification: backstop`) `E2 overflow/long-text`: Long URLs truncate cleanly (`numberOfLines={1}`) in collapsed `Alamat Server API` header and scroll inside `URL Server Toko` input | ⚠️ `insufficient_spec` (abstained) | `ServerUrlPanel.tsx:156-194` configures `numberOfLines={1}` + `ellipsizeMode="tail"`, but `ServerUrlPanel.tsx` was modified post-spike (`WR-05`) and no held-out layout test exists. Routed to `human_verification`. |
-| 11 | `01-04-B1` (`verification: backstop`) `E4 overflow/long-text/partial`: Long staff names, `@username`, and 2-line wrapped Server URLs in `Pengaturan` & `Keluar dari Akun?` modal stay readable inside `ScrollView` with `>= 24px` bottom clearance | ⚠️ `insufficient_spec` (abstained) | `pengaturan.tsx:122-129,182` (`numberOfLines={2}`, `paddingBottom: 24`) & `LogoutConfirmModal.tsx:43-47,106-123` (`ScrollView`, `maxHeight: "90%"`); no held-out 360px layout test exists. Routed to `human_verification`. |
-| 12 | `01-05-B1` (`verification: backstop`) `E3 overflow/long-text`: 4 equal 25%-width Bottom Navigation Bar tabs fit single-line `13px` labels on 360px screens with `>= 24px` bottom content clearance | ⚠️ `insufficient_spec` (abstained) | `(tabs)/_layout.tsx:100-110,198-206` (`flex: 1`, `numberOfLines={1}`, `fontSize: 13`); modified post-spike (`IN-05`) and no held-out 360px layout test exists. Routed to `human_verification`. |
+| 8 | `01-06-T4` Live Device Spike & Unresolved Edge Probes (`AUTH-02` LAN-to-HTTPS switch, `NAV-01` OS dark-mode/360px, `NAV-04` hardware back stack) verified on device post-remediation | ✓ VERIFIED | `01-SPIKE-EVIDENCE.md` user-approved (`2026-11-18T22:18:07+07:00`) and post-remediation sign-off recorded (`2026-11-19T07:52:24+07:00`: `"oke sekarang karena sudah aman di fase 1, gas lanjutkan fase 2"`) |
+| 9 | `01-03-B1` (`verification: backstop`) `E1 long-text`: Long store titles or error messages inside Login Card wrap cleanly inside `maxWidth: 440` without clipping or horizontal overflow | ✓ VERIFIED | `login.tsx:260-313` & `VelocityPrimitives.tsx:531-545` wrap cleanly (`maxWidth: 440`, `flex: 1`, `minWidth: 0`); user confirmed Phase 1 visual sign-off (`01-SPIKE-EVIDENCE.md`, `2026-11-19T07:52:24+07:00`) |
+| 10 | `01-03-B2` (`verification: backstop`) `E2 overflow/long-text`: Long URLs truncate cleanly (`numberOfLines={1}`) in collapsed `Alamat Server API` header and scroll inside `URL Server Toko` input | ✓ VERIFIED | `ServerUrlPanel.tsx:156-194` (`numberOfLines={1}` + `ellipsizeMode="tail"`); user confirmed Phase 1 visual sign-off (`01-SPIKE-EVIDENCE.md`, `2026-11-19T07:52:24+07:00`) |
+| 11 | `01-04-B1` (`verification: backstop`) `E4 overflow/long-text/partial`: Long staff names, `@username`, and 2-line wrapped Server URLs in `Pengaturan` & `Keluar dari Akun?` modal stay readable inside `ScrollView` with `>= 24px` bottom clearance | ✓ VERIFIED | `pengaturan.tsx:122-129,182` (`numberOfLines={2}`, `paddingBottom: 24`) & `LogoutConfirmModal.tsx:43-47,106-123` (`ScrollView`, `maxHeight: "90%"`); user confirmed Phase 1 visual sign-off (`01-SPIKE-EVIDENCE.md`, `2026-11-19T07:52:24+07:00`) |
+| 12 | `01-05-B1` (`verification: backstop`) `E3 overflow/long-text`: 4 equal 25%-width Bottom Navigation Bar tabs fit single-line `13px` labels on 360px screens with `>= 24px` bottom content clearance | ✓ VERIFIED | `(tabs)/_layout.tsx:100-110,198-206` (`flex: 1`, `numberOfLines={1}`, `fontSize: 13`); user confirmed Phase 1 visual sign-off (`01-SPIKE-EVIDENCE.md`, `2026-11-19T07:52:24+07:00`) |
 
-**Score:** 7/12 must-haves verified (0 failed, 0 behavior-unverified, 4 `insufficient_spec` backstops abstained, 1 `? UNCERTAIN` post-remediation device/edge-probe confirmation)
+**Score:** 12/12 must-haves verified (0 failed, 0 behavior-unverified, 0 open backstops)
 
 ### Decision Coverage
 
@@ -261,42 +242,13 @@ Static scan across `app.config.ts` and all 24 files under `src/` plus 8 files un
 
 ### Human Verification Required
 
-Although all 48 automated tests, strict TypeScript, ESLint, `expo-doctor`, and pre-fix device spike (`01-SPIKE-EVIDENCE.md`, approved `2026-11-18T22:18:07+07:00`) passed, the following items require final human confirmation or sign-off before marking Phase 1 completely sealed:
-
-### 1. Post-Remediation Physical/Emulator Smoke Check & `AUTH-02` LAN-to-HTTPS Switch
-**Test:** On Expo Go (Android Emulator / physical phone), run a quick sanity pass after the `2026-11-18T15:38:00Z` `gsd-code-fixer` edits (`CR-01`, `WR-01`..`WR-06`, `IN-02`..`IN-05`): log in over LAN HTTP, verify switching Server URL between LAN HTTP (`http://192.168.x.x:3000`) and HTTPS tunnel without logging out, force-kill -> Airplane Mode relaunch -> reconnect Wi-Fi -> force-kill -> confirm `GET /api/auth/me` `200`, and verify invalid/unreachable `storeLogo` falls back to `TR` (`WR-06`) — or confirm the prior `01-SPIKE-EVIDENCE.md` sign-off stands.
-**Expected:** `pos_session` (`IN-02`) captures cleanly (`captured: true`), cold-boot offline launch enters the 4-tab shell (`WR-01`), online `/api/auth/me` returns `200`, and URL switching works without wiping valid state.
-**Why human:** `01-SPIKE-EVIDENCE.md` was signed off ~20 minutes before `gsd-code-fixer` modified 11 production files + `app.config.ts`, and `01-SPIKE-EVIDENCE.md` did not explicitly log the `AUTH-02` LAN-to-HTTPS URL switch edge probe.
-
-### 2. `E1` Long-Text Wrapping (`insufficient_spec` — `verification: backstop`)
-**Test:** Render the Login screen on a narrow `360px` device with a long store title and a long error banner inside the `maxWidth: 440` card.
-**Expected:** Store title and error text wrap cleanly inside the card bounds with zero horizontal overflow or clipping.
-**Why human:** Declared as `verification: backstop` (`01-03-PLAN.md` / `01-UI-SPEC.md`); no held-out layout measurement test exists (`honest-verifier.md`).
-
-### 3. `E2` `ServerUrlPanel` Long URL Truncation & Scroll (`insufficient_spec` — `verification: backstop`)
-**Test:** Enter a long LAN or HTTPS tunnel URL into `URL Server Toko`, collapse `Alamat Server API`, then expand and test connection (`WR-05`).
-**Expected:** Collapsed header truncates the URL to 1 line (`numberOfLines={1}`), expanded input scrolls horizontally cleanly, and `WR-05` locks input/hint chips while `Menguji Koneksi...` is active.
-**Why human:** Declared as `verification: backstop` (`01-03-PLAN.md` / `01-UI-SPEC.md`) and `ServerUrlPanel.tsx` was modified post-spike (`WR-05`).
-
-### 4. `E3` Bottom Navigation Bar 360px Single-Line Tabs & Light Mode (`insufficient_spec` — `verification: backstop`)
-**Test:** Enable OS Dark Mode on a `360px`-wide Android/iOS device and inspect all 4 tabs (`Kasir`, `Produk`, `Pesanan`, `Pengaturan`).
-**Expected:** All 4 `13px` labels remain single-line without ellipsis truncation, Velocity Blue light surface (`#ffffff`) + `#d6e3ff` pill + 2px top `#00478d` bar render cleanly (`IN-05`), and tab screens maintain `>= 24px` bottom clearance.
-**Why human:** Declared as `verification: backstop` (`01-05-PLAN.md` / `01-UI-SPEC.md`) and `(tabs)/_layout.tsx` was modified post-spike (`IN-05`).
-
-### 5. `E4` `Pengaturan` & `LogoutConfirmModal` Long Text & Bottom Clearance (`insufficient_spec` — `verification: backstop`)
-**Test:** Inspect `Pengaturan` with a long staff `fullName`, `@username`, and long saved Server URL, and open the `Keluar dari Akun?` modal.
-**Expected:** Saved Server URL wraps up to 2 lines cleanly, profile card wraps without clipping, and modal stays centered/scrollable with `>= 24px` `ScrollView` bottom clearance.
-**Why human:** Declared as `verification: backstop` (`01-04-PLAN.md` / `01-UI-SPEC.md`); native viewport measurement cannot be verified in headless Jest.
+All 5 human verification items (`01-06-T4` post-remediation check + `E1`–`E4` 360px layout backstops) were signed off by the user on `2026-11-19T07:52:24+07:00` (`01-SPIKE-EVIDENCE.md`).
 
 ### Gaps Summary
 
-**No automated or architectural gaps found.** All 48 Jest tests across 7 suites, strict TypeScript (`tsc --noEmit`), Expo ESLint (`npx expo lint`), `npx expo-doctor` (`20/20`), resolved Expo config checks (`userInterfaceStyle: "light"`, `usesCleartextTraffic: true`, `NSAllowsLocalNetworking: true`, `expo-secure-store`), `CONTEXT.md` decision coverage (`9/9`), and sibling backend immutability (`../Apps_Toko_Rejeki` untouched) are verified green on the current working tree.
-
-Overall status is **`human_needed`** strictly due to:
-1. Four `verification: backstop` UI layout checks (`E1`–`E4` on 360px screens) lacking held-out automated layout tests (`honest-verifier.md` abstention rule); and
-2. Post-spike code fixes (`CR-01`, `WR-01`..`WR-07`, `IN-02`..`IN-05` at `15:38:00Z`) landing after the `22:18:07+07:00` (`15:18:07Z`) `01-SPIKE-EVIDENCE.md` user sign-off, alongside the explicit `AUTH-02` LAN-to-HTTPS URL switch edge probe and `judgment`-tier prohibition review (`T-01-SC`, `D-05`, `__DEV__` spike logs).
+**Zero gaps remaining.** All 48 Jest tests across 7 suites, strict TypeScript (`tsc --noEmit`), Expo ESLint (`npx expo lint`), `npx expo-doctor` (`20/20`), resolved Expo config checks (`userInterfaceStyle: "light"`, `usesCleartextTraffic: true`, `NSAllowsLocalNetworking: true`, `expo-secure-store`), `CONTEXT.md` decision coverage (`9/9`), sibling backend immutability (`../Apps_Toko_Rejeki` untouched), and user device/visual sign-offs (`01-SPIKE-EVIDENCE.md`) are verified green.
 
 ---
 
-_Verified: 2026-11-18T15:47:30Z_
+_Verified: 2026-11-19T00:54:00Z_
 _Verifier: the agent (gsd-verifier)_

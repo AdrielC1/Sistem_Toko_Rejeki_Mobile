@@ -9,17 +9,17 @@ Requirements untuk rilis awal (v1). Setiap requirement akan dipetakan ke fase pa
 
 ### Authentication & Connectivity
 
-- [ ] **AUTH-01**: Pengguna dapat login menggunakan username dan password melalui `POST /api/auth/login` dengan toggle tampil/sembunyi kata sandi serta penanganan error `400`, `401`, `403` (akun nonaktif), dan countdown `429` (throttle)
-- [ ] **AUTH-02**: Pengguna dapat mengonfigurasi dan menguji URL server API (`Server URL` LAN HTTP / HTTPS tunnel) dari halaman Login maupun Pengaturan
-- [ ] **AUTH-03**: Sesi login pengguna (`pos_session` cookie/token & profil pengguna lokal) bertahan saat aplikasi ditutup/dibuka ulang dalam mode offline dan hanya menghapus sesi ketika server memberi `401` atau `GET /api/auth/me` mengembalikan `403`
-- [ ] **AUTH-04**: Pengguna dapat keluar (logout) melalui modal konfirmasi yang memanggil `POST /api/auth/logout` secara fail-safe (tetap membersihkan sesi lokal saat offline)
+- [x] **AUTH-01**: Pengguna dapat login menggunakan username dan password melalui `POST /api/auth/login` dengan toggle tampil/sembunyi kata sandi serta penanganan error `400`, `401`, `403` (akun nonaktif), dan countdown `429` (throttle)
+- [x] **AUTH-02**: Pengguna dapat mengonfigurasi dan menguji URL server API (`Server URL` LAN HTTP / HTTPS tunnel) dari halaman Login maupun Pengaturan
+- [x] **AUTH-03**: Sesi login pengguna (`pos_session` cookie/token & profil pengguna lokal) bertahan saat aplikasi ditutup/dibuka ulang dalam mode offline dan hanya menghapus sesi ketika server memberi `401` atau `GET /api/auth/me` mengembalikan `403`
+- [x] **AUTH-04**: Pengguna dapat keluar (logout) melalui modal konfirmasi yang memanggil `POST /api/auth/logout` secara fail-safe (tetap membersihkan sesi lokal saat offline)
 
 ### App Shell & Navigation
 
-- [ ] **NAV-01**: Aplikasi menampilkan Bottom Navigation Bar 4 tab utama (`Kasir`, `Produk`, `Pesanan`, `Pengaturan`) di dalam shell terproteksi (`<Stack.Protected>`) sesuai desain *Velocity Blue*
+- [x] **NAV-01**: Aplikasi menampilkan Bottom Navigation Bar 4 tab utama (`Kasir`, `Produk`, `Pesanan`, `Pengaturan`) di dalam shell terproteksi (`<Stack.Protected>`) sesuai desain *Velocity Blue*
 - [ ] **NAV-02**: Tab `Pesanan` pada Bottom Navigation Bar menampilkan badge jumlah nota tertunda lokal secara real-time
 - [ ] **NAV-03**: Header status global menampilkan kondisi koneksi database (`/api/health`: Online / Standby Read-Only / Offline) dan status sinkronisasi katalog lokal
-- [ ] **NAV-04**: Sistem menegakkan hak akses peran (`kasir`, `admin`, `owner`): `kasir` melihat tab `Produk` dan `Detail Produk` dalam mode *read-only* (tanpa `costPrice` maupun aksi ubah), `admin` dapat mengelola produk, dan `owner` memiliki akses penuh termasuk sub-halaman manajemen
+- [x] **NAV-04**: Sistem menegakkan hak akses peran (`kasir`, `admin`, `owner`): `kasir` melihat tab `Produk` dan `Detail Produk` dalam mode *read-only* (tanpa `costPrice` maupun aksi ubah), `admin` dapat mengelola produk, dan `owner` memiliki akses penuh termasuk sub-halaman manajemen
 
 ### Offline Catalog & Sync Engine
 
@@ -91,14 +91,14 @@ Diisi otomatis saat pembuatan `ROADMAP.md`.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Pending |
-| AUTH-02 | Phase 1 | Pending |
-| AUTH-03 | Phase 1 | Pending |
-| AUTH-04 | Phase 1 | Pending |
-| NAV-01 | Phase 1 | Pending |
+| AUTH-01 | Phase 1 | Complete |
+| AUTH-02 | Phase 1 | Complete |
+| AUTH-03 | Phase 1 | Complete |
+| AUTH-04 | Phase 1 | Complete |
+| NAV-01 | Phase 1 | Complete |
 | NAV-02 | Phase 4 | Pending |
 | NAV-03 | Phase 2 | Pending |
-| NAV-04 | Phase 1 | Pending |
+| NAV-04 | Phase 1 | Complete |
 | SYNC-01 | Phase 2 | Pending |
 | SYNC-02 | Phase 2 | Pending |
 | SYNC-03 | Phase 2 | Pending |
