@@ -1,56 +1,88 @@
-# Welcome to your Expo app 👋
+# Apps Toko Rejeki Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplikasi kasir (POS) mobile mandiri berbasis **Expo (SDK 58) + Expo Router + TypeScript** yang terhubung ke layanan API **Apps Toko Rejeki**, lengkap dengan persistensi sesi, sinkronisasi katalog lokal (SQLite), multi-nota tertunda, manajemen kategori/satuan, serta pencetakan struk 58mm/80mm.
 
-## Get started
+---
 
-1. Install dependencies
+## 1. Menjalankan di Mode Pengembangan
 
-   ```bash
+1. Install dependensi:
+   ```powershell
    npm install
    ```
-
-2. Start the app
-
-   ```bash
+2. Jalankan Metro bundler:
+   ```powershell
    npx expo start
    ```
+3. Verifikasi tipe & unit test:
+   ```powershell
+   npm run typecheck
+   npm test
+   ```
 
-In the output, you'll find options to open the app in a
+> **Catatan Expo Go vs Build Native (APK):**
+> Aplikasi tetap dapat dijalankan melalui **Expo Go** untuk pengujian UI, transaksi kasir, cetak via **Printer Server Toko**, dan **Cetak Sistem HP / PDF**. Namun, fitur **Thermal Bluetooth ESC/POS** (`react-native-bluetooth-classic`) memerlukan modul native sehingga hanya aktif pada **APK / Development Build**.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+---
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## 2. Cara Build APK & Install ke HP Toko
 
-## Get a fresh project
+Proyek ini sudah dikonfigurasi di [eas.json](eas.json) dan [app.config.ts](app.config.ts) untuk menghasilkan file `.apk` Android secara langsung melalui **EAS Build**:
 
-When you're ready, run:
+1. Install dan login ke EAS CLI (cukup dilakukan sekali):
+   ```powershell
+   npm install -g eas-cli
+   eas login
+   ```
+2. Pastikan perubahan kode sudah rapi dan di-commit:
+   ```powershell
+   git add .
+   git commit -m "chore: prepare release build"
+   ```
+3. Jalankan build APK (`preview` atau `production`):
+   ```powershell
+   eas build --platform android --profile preview
+   ```
+4. Setelah proses build di cloud selesai, EAS akan menampilkan **link download `.apk`** dan **QR Code**.
+5. Buka link / scan QR Code di HP toko, unduh file `.apk`, lalu install (aktifkan izin *"Install from unknown sources"* jika diminta Android).
 
-```bash
-npm run reset-project
-```
+---
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+## 3. Alur Update Aplikasi ke HP Toko
 
-### Other setup steps
+### Cara A — Build & Install APK Baru (Alur Standar)
+Gunakan alur ini setiap kali ada pembaruan aplikasi, terutama jika ada perubahan library native, izin, atau konfigurasi di `app.config.ts`:
+1. Edit kode dan pastikan lulus pengecekan (`npm run typecheck` & `npm test`).
+2. Commit perubahan ke Git (`git add .` & `git commit`).
+3. Jalankan ulang `eas build --platform android --profile preview`.
+4. Unduh APK baru di HP toko lalu **install langsung menimpa aplikasi yang lama** (tidak perlu uninstall).
+   > Selama `android.package` (`com.tokorejeki.posmobile`) dan akun/keystore EAS tidak berubah, **data sesi login, pengaturan printer lokal, dan cache katalog SQLite tetap aman**.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### Cara B — Update Instan Tanpa Download APK (`eas update` / OTA) *(Opsional)*
+Jika ke depan Anda sering memperbarui tampilan UI atau logika TypeScript/JavaScript tanpa menambah modul native baru:
+1. Pasang `expo-updates` sekali saja (`npx expo install expo-updates`) lalu build APK baru sekali lagi agar dukungan OTA tertanam di dalam APK.
+2. Untuk pembaruan UI/JS berikutnya, cukup jalankan:
+   ```powershell
+   eas update --branch preview --message "Deskripsi pembaruan"
+   ```
+3. Aplikasi di HP toko akan otomatis mengunduh pembaruan saat dibuka ulang tanpa perlu download dan install ulang file `.apk`.
+   > **Catatan:** Jika Anda menambah/mengubah paket native (seperti driver hardware atau izin Android di `app.config.ts`), tetap wajib memakai **Cara A** (build APK baru).
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## 4. Cara Menguji Cetak Struk (Termasuk HP Built-in Printer)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Di HP POS dengan *built-in printer* (seperti Sunmi, iMin, atau perangkat EDC Android sejenis), printer internal biasanya muncul sebagai **Bluetooth Paired Device** (`InnerPrinter` / `BlueTooth Printer`) atau layanan **Android Print Service**.
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. **Mode Thermal Bluetooth ESC/POS:**
+   - Nyalakan Bluetooth di HP toko dan pastikan printer internal/eksternal sudah ter-*pair* di **Pengaturan Bluetooth Android**.
+   - Buka aplikasi → tab **Pengaturan** → **Printer & Metode Cetak**.
+   - Pilih **Thermal Bluetooth ESC/POS** dan pilih **Ukuran Kertas Struk Lokal** (**58mm** untuk mayoritas *built-in printer* genggam, atau **80mm** untuk printer meja).
+   - Tekan **Pindai Printer Terpasang (Paired)**, izinkan akses Bluetooth saat diminta, lalu pilih perangkat printer.
+   - Tekan **Simpan Pengaturan Printer**, lalu tekan **Tes Cetak Sekarang**.
+2. **Mode Cetak Sistem HP / PDF:**
+   - Pilih **Cetak Sistem HP / PDF** → **Tes Cetak Sekarang** untuk mencetak melalui dialog print bawaan Android (atau menyimpan sebagai PDF).
+3. **Mode Printer Server Toko:**
+   - Pilih **Printer Server Toko** untuk mengirim perintah cetak ke server kasir utama (`Apps_Toko_Rejeki`) melalui endpoint `/api/print`.
+4. **Cetak Transaksi di Kasir:**
+   - Tambahkan produk di tab **Kasir**, buka **Nota Aktif**, lalu pilih **Cetak Struk 1x** atau **Cetak Struk 2x** (ukuran kertas 58mm/80mm dan jumlah salinan juga bisa diubah cepat di modal Pratinjau Struk).

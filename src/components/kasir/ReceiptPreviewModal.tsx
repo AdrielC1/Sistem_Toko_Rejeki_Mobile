@@ -21,10 +21,10 @@ export interface ReceiptPreviewModalProps {
   visible: boolean;
   order: CompletedOrder | null;
   paperWidthMm?: number;
-  copies: 2 | 3;
+  copies: 1 | 2;
   printerMode: PrinterDeviceMode;
   isSubmitting: boolean;
-  onChangeCopies: (copies: 2 | 3) => void;
+  onChangeCopies: (copies: 1 | 2) => void;
   onChangePaperWidth?: (width: 58 | 80) => void;
   onClose: () => void;
   onConfirmPrint: () => void;
@@ -194,7 +194,7 @@ export function ReceiptPreviewModal({
 
                 <View style={styles.copiesGroup}>
                   <Text style={styles.metaLabel}>Salinan:</Text>
-                  {([2, 3] as const).map((val) => {
+                  {([1, 2] as const).map((val) => {
                     const selected = copies === val;
                     return (
                       <Pressable

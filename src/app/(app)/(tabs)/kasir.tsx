@@ -300,7 +300,7 @@ export default function KasirScreen() {
     orderToPrint: CompletedOrder,
     tabIdToComplete: string,
     overrideMode?: PrinterDeviceMode,
-    copiesOverride?: 2 | 3
+    copiesOverride?: 1 | 2
   ) => {
     const activeCopies = copiesOverride ?? printCopies;
     setIsPrinting(true);
@@ -363,7 +363,7 @@ export default function KasirScreen() {
     }
   };
 
-  const handleCheckoutTap = async (copiesToUse?: 2 | 3) => {
+  const handleCheckoutTap = async (copiesToUse?: 1 | 2) => {
     if (!activeTab) {
       return;
     }
@@ -1039,7 +1039,7 @@ export default function KasirScreen() {
         </View>
       </View>
 
-      {/* Bottom Print Action Buttons (Cetak Struk 2x [Green] & Cetak Struk 3x) */}
+      {/* Bottom Print Action Buttons (Cetak Struk 1x [Green] & Cetak Struk 2x) */}
       <View style={styles.printActionsFooter}>
         <Pressable
           testID="kasir-checkout-button"
@@ -1048,7 +1048,7 @@ export default function KasirScreen() {
             isPrinting || !activeTab || activeTab.items.length === 0
           }
           onPress={() => {
-            void handleCheckoutTap(2);
+            void handleCheckoutTap(1);
           }}
           style={({ pressed }) => [
             styles.print2xBtn,
@@ -1059,20 +1059,20 @@ export default function KasirScreen() {
         >
           <Copy size={17} color="#ffffff" />
           <Text style={styles.print2xBtnText}>
-            {isPrinting && printCopies === 2
+            {isPrinting && printCopies === 1
               ? "Memproses..."
-              : "Cetak Struk 2x"}
+              : "Cetak Struk 1x"}
           </Text>
         </Pressable>
 
         <Pressable
-          testID="kasir-checkout-3x-button"
+          testID="kasir-checkout-2x-button"
           accessibilityRole="button"
           disabled={
             isPrinting || !activeTab || activeTab.items.length === 0
           }
           onPress={() => {
-            void handleCheckoutTap(3);
+            void handleCheckoutTap(2);
           }}
           style={({ pressed }) => [
             styles.print3xBtn,
@@ -1083,9 +1083,9 @@ export default function KasirScreen() {
         >
           <Files size={17} color={TOKENS.colors.primary} />
           <Text style={styles.print3xBtnText}>
-            {isPrinting && printCopies === 3
+            {isPrinting && printCopies === 2
               ? "Memproses..."
-              : "Cetak Struk 3x"}
+              : "Cetak Struk 2x"}
           </Text>
         </Pressable>
       </View>

@@ -43,11 +43,11 @@ export interface PrinterPrefsState {
   mode: PrinterDeviceMode;
   bluetoothDevice: PairedBluetoothPrinter | null;
   bluetoothPaperWidth: 58 | 80;
-  defaultCopies: 2 | 3;
+  defaultCopies: 1 | 2;
   setMode: (mode: PrinterDeviceMode) => void;
   setBluetoothDevice: (device: PairedBluetoothPrinter | null) => void;
   setBluetoothPaperWidth: (width: 58 | 80) => void;
-  setDefaultCopies: (copies: 2 | 3) => void;
+  setDefaultCopies: (copies: 1 | 2) => void;
   resetForTest: () => void;
 }
 
@@ -57,7 +57,7 @@ export const usePrinterPrefsStore = create<PrinterPrefsState>()(
       mode: "server",
       bluetoothDevice: null,
       bluetoothPaperWidth: 58,
-      defaultCopies: 2,
+      defaultCopies: 1,
 
       setMode: (mode) => set({ mode }),
       setBluetoothDevice: (bluetoothDevice) => set({ bluetoothDevice }),
@@ -69,7 +69,7 @@ export const usePrinterPrefsStore = create<PrinterPrefsState>()(
           mode: "server",
           bluetoothDevice: null,
           bluetoothPaperWidth: 58,
-          defaultCopies: 2,
+          defaultCopies: 1,
         }),
     }),
     {
@@ -81,6 +81,11 @@ export const usePrinterPrefsStore = create<PrinterPrefsState>()(
         bluetoothPaperWidth: state.bluetoothPaperWidth,
         defaultCopies: state.defaultCopies,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state && state.defaultCopies !== 1 && state.defaultCopies !== 2) {
+          state.setDefaultCopies(1);
+        }
+      },
     }
   )
 );
