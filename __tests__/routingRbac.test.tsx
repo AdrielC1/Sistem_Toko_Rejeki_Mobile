@@ -121,7 +121,8 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
     const dbOfflineView = await renderRouter("./src/app", { initialUrl: "/" });
 
     await waitFor(() => {
-      expect(screen.getByText("Halo, Siti Kasir")).toBeTruthy();
+      expect(screen.getByTestId("kasir-header")).toBeTruthy();
+      expect(screen.getByText("Katalog Produk")).toBeTruthy();
     });
     expect(SplashScreen.hideAsync).toHaveBeenCalled();
     expect(screen.getByTestId("bottom-tab-bar")).toBeTruthy();
@@ -171,7 +172,7 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
       expect(screen.getByText("Masuk ke Sistem")).toBeTruthy();
       expect(blockedKasir.getPathname()).toBe("/login");
     });
-    expect(screen.queryByText(/Halo,/)).toBeNull();
+    expect(screen.queryByTestId("kasir-header")).toBeNull();
     expect(screen.queryByTestId("bottom-tab-bar")).toBeNull();
     await blockedKasir.unmount();
 
@@ -182,8 +183,7 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
       expect(screen.getByText("Masuk ke Sistem")).toBeTruthy();
       expect(blockedProduk.getPathname()).toBe("/login");
     });
-    expect(screen.queryByText("Mode Baca Saja (Kasir)")).toBeNull();
-    expect(screen.queryByText("Mode Kelola Katalog Aktif")).toBeNull();
+    expect(screen.queryByTestId("produk-header")).toBeNull();
     expect(screen.queryByTestId("bottom-tab-bar")).toBeNull();
     await blockedProduk.unmount();
   });
@@ -193,7 +193,7 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
     const routerView = await renderRouter("./src/app", { initialUrl: "/" });
 
     await waitFor(() => {
-      expect(screen.getByText("Halo, Siti Kasir")).toBeTruthy();
+      expect(screen.getByTestId("kasir-header")).toBeTruthy();
       expect(routerView.getPathname()).toBe("/kasir");
     });
 
@@ -206,12 +206,13 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
       screen.getByTestId("tab-kasir").props.accessibilityState.selected
     ).toBe(true);
 
-    // Tap Produk tab -> shows Mode Baca Saja (Kasir) only
+    // Tap Produk tab -> hides add/trash action buttons for kasir
     await fireEvent.press(screen.getByTestId("tab-produk"));
     await waitFor(() => {
-      expect(screen.getByText("Mode Baca Saja (Kasir)")).toBeTruthy();
+      expect(screen.getByTestId("produk-header")).toBeTruthy();
     });
-    expect(screen.queryByText("Mode Kelola Katalog Aktif")).toBeNull();
+    expect(screen.queryByTestId("produk-add-button")).toBeNull();
+    expect(screen.queryByTestId("produk-trash-button")).toBeNull();
     expect(
       screen.getByTestId("tab-produk").props.accessibilityState.selected
     ).toBe(true);
@@ -228,16 +229,16 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
     await routerView.unmount();
   });
 
-  it("displays Mode Kelola Katalog Aktif and hides Mode Baca Saja (Kasir) for admin and owner", async () => {
+  it("displays add/trash catalog toolbar buttons for admin and owner", async () => {
     await seedSession(ADMIN_USER, { online: false });
     const adminView = await renderRouter("./src/app", {
       initialUrl: "/produk",
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Mode Kelola Katalog Aktif")).toBeTruthy();
+      expect(screen.getByTestId("produk-add-button")).toBeTruthy();
+      expect(screen.getByTestId("produk-trash-button")).toBeTruthy();
     });
-    expect(screen.queryByText("Mode Baca Saja (Kasir)")).toBeNull();
     await adminView.unmount();
 
     resetTestStorage();
@@ -248,9 +249,9 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Mode Kelola Katalog Aktif")).toBeTruthy();
+      expect(screen.getByTestId("produk-add-button")).toBeTruthy();
+      expect(screen.getByTestId("produk-trash-button")).toBeTruthy();
     });
-    expect(screen.queryByText("Mode Baca Saja (Kasir)")).toBeNull();
     await ownerView.unmount();
   });
 
@@ -297,13 +298,13 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
     const routerView = await renderRouter("./src/app", { initialUrl: "/" });
 
     await waitFor(() => {
-      expect(screen.getByText("Halo, Budi Owner")).toBeTruthy();
+      expect(screen.getByTestId("kasir-header")).toBeTruthy();
     });
 
     // Navigate to Produk (owner privileges) then Pengaturan
     await fireEvent.press(screen.getByTestId("tab-produk"));
     await waitFor(() => {
-      expect(screen.getByText("Mode Kelola Katalog Aktif")).toBeTruthy();
+      expect(screen.getByTestId("produk-add-button")).toBeTruthy();
     });
 
     await fireEvent.press(screen.getByTestId("tab-pengaturan"));
@@ -351,19 +352,19 @@ describe("Root Stack.Protected, 4-tab Velocity Blue shell & RBAC integration", (
 
     // Fresh kasir shell mounts at /kasir with zero stale owner state
     await waitFor(() => {
-      expect(screen.getByText("Halo, Siti Kasir")).toBeTruthy();
+      expect(screen.getByTestId("kasir-header")).toBeTruthy();
       expect(routerView.getPathname()).toBe("/kasir");
     });
     expect(screen.queryByText("Budi Owner")).toBeNull();
     expect(screen.queryByText("@owner1")).toBeNull();
-    expect(screen.queryByText("Mode Kelola Katalog Aktif")).toBeNull();
 
-    // Produk shows read-only kasir banner, never owner privileges
+    // Produk hides owner edit/trash toolbar buttons for kasir
     await fireEvent.press(screen.getByTestId("tab-produk"));
     await waitFor(() => {
-      expect(screen.getByText("Mode Baca Saja (Kasir)")).toBeTruthy();
+      expect(screen.getByTestId("produk-header")).toBeTruthy();
     });
-    expect(screen.queryByText("Mode Kelola Katalog Aktif")).toBeNull();
+    expect(screen.queryByTestId("produk-add-button")).toBeNull();
+    expect(screen.queryByTestId("produk-trash-button")).toBeNull();
 
     // Pengaturan shows Siti Kasir, zero stale owner info
     await fireEvent.press(screen.getByTestId("tab-pengaturan"));

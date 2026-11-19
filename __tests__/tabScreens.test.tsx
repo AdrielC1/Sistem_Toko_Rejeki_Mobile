@@ -223,7 +223,7 @@ describe("Tab screens and LogoutConfirmModal (UI-SPEC E4)", () => {
     await unmount();
   });
 
-  it("renders Kasir greeting, RoleBadge, and navigates to Pengaturan", async () => {
+  it("renders compact 1-row Kasir header without greeting bar", async () => {
     await seedOfflineSession(KASIR_USER);
 
     const { unmount } = await render(
@@ -233,23 +233,27 @@ describe("Tab screens and LogoutConfirmModal (UI-SPEC E4)", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Halo, Budi Kasir")).toBeTruthy();
+      expect(
+        within(screen.getByTestId("kasir-header")).getByText("Kasir")
+      ).toBeTruthy();
     });
+    expect(screen.queryByTestId("kasir-greeting-text")).toBeNull();
+    expect(screen.queryByTestId("kasir-role-badge")).toBeNull();
+    expect(screen.queryByTestId("kasir-open-settings-button")).toBeNull();
     expect(
-      within(screen.getByTestId("kasir-header")).getByText("Kasir")
+      within(screen.getByTestId("kasir-header")).getByTestId("header-sync-pill")
     ).toBeTruthy();
     expect(
-      within(screen.getByTestId("kasir-role-badge")).getByText("Kasir")
+      within(screen.getByTestId("kasir-header")).getByTestId(
+        "header-route-status-pill"
+      )
     ).toBeTruthy();
-
-    await fireEvent.press(screen.getByTestId("kasir-open-settings-button"));
-    expect(mockPush).toHaveBeenCalledWith("/pengaturan");
 
     await unmount();
   });
 
-  it("gates Produk between Mode Baca Saja (Kasir) and Mode Kelola Katalog Aktif (Admin/Owner)", async () => {
-    // 1. Kasir role -> read-only banner only
+  it("gates Produk action buttons cleanly without bulky role banners", async () => {
+    // 1. Kasir role -> no manage policy banner and hides add/trash buttons
     await seedOfflineSession(KASIR_USER);
     const kasirView = await render(
       <AuthProvider>
@@ -258,23 +262,20 @@ describe("Tab screens and LogoutConfirmModal (UI-SPEC E4)", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Mode Baca Saja (Kasir)")).toBeTruthy();
+      expect(
+        screen.getByText("Katalog Produk Belum Tersinkronisasi")
+      ).toBeTruthy();
     });
-    expect(
-      screen.getByText(
-        "Akun Kasir hanya dapat melihat daftar produk dan harga jual. Harga modal dan aksi ubah produk disembunyikan."
-      )
-    ).toBeTruthy();
+    expect(screen.queryByText("Mode Baca Saja (Kasir)")).toBeNull();
     expect(screen.queryByText("Mode Kelola Katalog Aktif")).toBeNull();
-    expect(
-      screen.getByText("Katalog Produk Belum Tersinkronisasi")
-    ).toBeTruthy();
+    expect(screen.queryByTestId("produk-add-button")).toBeNull();
+    expect(screen.queryByTestId("produk-trash-button")).toBeNull();
 
     await fireEvent.press(screen.getByTestId("produk-open-settings-button"));
     expect(mockPush).toHaveBeenCalledWith("/pengaturan");
     await kasirView.unmount();
 
-    // 2. Admin role -> Mode Kelola Katalog Aktif pill only
+    // 2. Admin role -> shows add/trash buttons and compact 1-row header
     resetTestStorage();
     jest.clearAllMocks();
     await seedOfflineSession(ADMIN_USER);
@@ -285,12 +286,14 @@ describe("Tab screens and LogoutConfirmModal (UI-SPEC E4)", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Mode Kelola Katalog Aktif")).toBeTruthy();
+      expect(screen.getByTestId("produk-add-button")).toBeTruthy();
+      expect(screen.getByTestId("produk-trash-button")).toBeTruthy();
     });
     expect(screen.queryByText("Mode Baca Saja (Kasir)")).toBeNull();
+    expect(screen.queryByText("Mode Kelola Katalog Aktif")).toBeNull();
     await adminView.unmount();
 
-    // 3. Owner role -> Mode Kelola Katalog Aktif pill only
+    // 3. Owner role -> shows add/trash buttons cleanly
     resetTestStorage();
     jest.clearAllMocks();
     await seedOfflineSession(OWNER_USER);
@@ -301,9 +304,9 @@ describe("Tab screens and LogoutConfirmModal (UI-SPEC E4)", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Mode Kelola Katalog Aktif")).toBeTruthy();
+      expect(screen.getByTestId("produk-add-button")).toBeTruthy();
+      expect(screen.getByTestId("produk-trash-button")).toBeTruthy();
     });
-    expect(screen.queryByText("Mode Baca Saja (Kasir)")).toBeNull();
     await ownerView.unmount();
   });
 
@@ -327,6 +330,24 @@ describe("Tab screens and LogoutConfirmModal (UI-SPEC E4)", () => {
 
     await fireEvent.press(screen.getByTestId("pesanan-open-kasir-button"));
     expect(mockPush).toHaveBeenCalledWith("/kasir");
+
+    await unmount();
+  });
+
+  it("renders SyncControlCard inside Pengaturan", async () => {
+    await seedOfflineSession(OWNER_USER);
+    const { unmount } = await render(
+      <AuthProvider>
+        <PengaturanScreen />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("pengaturan-sync-control-card")
+      ).toBeTruthy();
+    });
+    expect(screen.getByText("Sinkronisasi & Cache Katalog")).toBeTruthy();
 
     await unmount();
   });
