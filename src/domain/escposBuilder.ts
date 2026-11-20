@@ -1,5 +1,9 @@
 import type { CompletedOrder } from "@/domain/pricing";
-import { buildReceiptRenderLines } from "@/domain/receiptLayout";
+import {
+  buildReceiptRenderLines,
+  getWidthForReceiptSize,
+  type NormalizedReceiptSize,
+} from "@/domain/receiptLayout";
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -22,9 +26,30 @@ function padColumns(left: string, right: string, width: number): string {
   return `${clippedLeft}${" ".repeat(spaces)}${right}`;
 }
 
+function applySizeCmds(size?: NormalizedReceiptSize): number[] {
+  if (size === "small") {
+    return [ESC, 0x4d, 0x01, GS, 0x21, 0x00]; // Font B, Normal 1x1
+  }
+  if (size === "medium") {
+    return [ESC, 0x4d, 0x01, GS, 0x21, 0x11]; // Font B, Double 2x2
+  }
+  if (size === "large") {
+    return [ESC, 0x4d, 0x00, GS, 0x21, 0x11]; // Font A, Double 2x2
+  }
+  return [ESC, 0x4d, 0x00, GS, 0x21, 0x00]; // Font A, Normal 1x1
+}
+
+function resetSizeCmds(size?: NormalizedReceiptSize): number[] {
+  if (size === "small" || size === "medium" || size === "large") {
+    return [ESC, 0x4d, 0x00, GS, 0x21, 0x00];
+  }
+  return [];
+}
+
 /**
  * Encodes a `CompletedOrder` into raw ESC/POS byte buffer matching web `escpos.ts`
- * (`58mm` = 32 chars/line, `80mm` = 48 chars/line).
+ * (`58mm` = 32 chars/line, `80mm` = 48 chars/line), with 2 extra blank feed lines
+ * at the bottom so the paper cutter does not slice into the footer text.
  */
 export function buildEscPosReceiptBytes(
   order: CompletedOrder,
@@ -43,31 +68,37 @@ export function buildEscPosReceiptBytes(
   for (const line of lines) {
     if (line.kind === "divider") {
       singleCopyBytes.push(ESC, 0x61, 0x00, ESC, 0x45, 0x00);
+      singleCopyBytes.push(...applySizeCmds("normal"));
       singleCopyBytes.push(...asciiEncode("-".repeat(cols)), LF);
       continue;
     }
 
+    const lineSize: NormalizedReceiptSize =
+      line.size ?? (line.fontSize === "lg" ? "large" : line.fontSize === "sm" ? "small" : "normal");
+
     if (line.kind === "kv") {
+      const effectiveCols = getWidthForReceiptSize(cols, lineSize);
+      const formatted = padColumns(
+        line.leftText ?? "",
+        line.rightText ?? "",
+        effectiveCols
+      );
       singleCopyBytes.push(
         ESC,
         0x61,
         0x00,
         ESC,
         0x45,
-        line.bold ? 0x01 : 0x00
-      );
-      const formatted = padColumns(
-        line.leftText ?? "",
-        line.rightText ?? "",
-        cols
+        line.bold ? 0x01 : 0x00,
+        ...applySizeCmds(lineSize)
       );
       singleCopyBytes.push(...asciiEncode(formatted), LF);
+      singleCopyBytes.push(...resetSizeCmds(lineSize));
       continue;
     }
 
     const alignByte =
       line.align === "center" ? 0x01 : line.align === "right" ? 0x02 : 0x00;
-    const sizeByte = line.fontSize === "lg" ? 0x11 : 0x00;
     singleCopyBytes.push(
       ESC,
       0x61,
@@ -75,14 +106,10 @@ export function buildEscPosReceiptBytes(
       ESC,
       0x45,
       line.bold ? 0x01 : 0x00,
-      GS,
-      0x21,
-      sizeByte
+      ...applySizeCmds(lineSize)
     );
     singleCopyBytes.push(...asciiEncode(line.text ?? ""), LF);
-    if (sizeByte !== 0x00) {
-      singleCopyBytes.push(GS, 0x21, 0x00);
-    }
+    singleCopyBytes.push(...resetSizeCmds(lineSize));
   }
 
   singleCopyBytes.push(
@@ -92,9 +119,12 @@ export function buildEscPosReceiptBytes(
     ESC,
     0x61,
     0x00,
+    ...resetSizeCmds("large"),
     LF,
     LF,
     LF,
+    LF, // Extra line 1 for mobile cutter clearance
+    LF, // Extra line 2 for mobile cutter clearance
     GS,
     0x56,
     0x00 // Full paper cut

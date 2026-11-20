@@ -85,10 +85,16 @@ export default function PengaturanPrinterScreen() {
   const printerMode = usePrinterPrefsStore((s) => s.mode);
   const bluetoothDevice = usePrinterPrefsStore((s) => s.bluetoothDevice);
   const bluetoothPaperWidth = usePrinterPrefsStore((s) => s.bluetoothPaperWidth);
+  const storedPreviewBeforePrint = usePrinterPrefsStore(
+    (s) => s.previewBeforePrint
+  );
   const setMode = usePrinterPrefsStore((s) => s.setMode);
   const setBluetoothDevice = usePrinterPrefsStore((s) => s.setBluetoothDevice);
   const setBluetoothPaperWidth = usePrinterPrefsStore(
     (s) => s.setBluetoothPaperWidth
+  );
+  const setStoredPreviewBeforePrint = usePrinterPrefsStore(
+    (s) => s.setPreviewBeforePrint
   );
 
   const [draftMode, setDraftMode] = useState<PrinterDeviceMode>(printerMode);
@@ -96,7 +102,7 @@ export default function PengaturanPrinterScreen() {
     bluetoothPaperWidth
   );
   const [previewBeforePrint, setPreviewBeforePrint] = useState<boolean>(
-    storeSettings?.previewReceiptBeforePrint ?? true
+    storedPreviewBeforePrint
   );
   const [pairedDevices, setPairedDevices] = useState<PairedBluetoothPrinter[]>(
     []
@@ -166,6 +172,7 @@ export default function PengaturanPrinterScreen() {
     try {
       setMode(draftMode);
       setBluetoothPaperWidth(draftPaperWidth);
+      setStoredPreviewBeforePrint(previewBeforePrint);
       const nextLocalSettings = {
         ...(storeSettings ?? { storeName: "Toko Rejeki" }),
         printerPaperWidth: draftPaperWidth,

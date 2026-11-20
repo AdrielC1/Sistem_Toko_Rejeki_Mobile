@@ -106,11 +106,9 @@ export default function KasirScreen() {
   const printerMode = usePrinterPrefsStore((s) => s.mode);
   const bluetoothDevice = usePrinterPrefsStore((s) => s.bluetoothDevice);
   const bluetoothPaperWidth = usePrinterPrefsStore((s) => s.bluetoothPaperWidth);
-  const setBluetoothPaperWidth = usePrinterPrefsStore(
-    (s) => s.setBluetoothPaperWidth
-  );
   const printCopies = usePrinterPrefsStore((s) => s.defaultCopies);
   const setPrintCopies = usePrinterPrefsStore((s) => s.setDefaultCopies);
+  const previewBeforePrint = usePrinterPrefsStore((s) => s.previewBeforePrint);
 
   const [segment, setSegment] = useState<KasirSegment>("catalog");
   const [isSliding, setIsSliding] = useState<boolean>(false);
@@ -186,7 +184,17 @@ export default function KasirScreen() {
     null
   );
   const [previewVisible, setPreviewVisible] = useState<boolean>(false);
+  const [printSuccess, setPrintSuccess] = useState<boolean>(false);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) {
+        clearTimeout(successTimerRef.current);
+      }
+    };
+  }, []);
   const [interventionState, setInterventionState] = useState<{
     visible: boolean;
     errorMessage: string;
@@ -320,7 +328,6 @@ export default function KasirScreen() {
           waLogSentRef.current = true;
           void submitWhatsAppOrderLog(serverConfig, orderToPrint);
         }
-        setPreviewVisible(false);
         setInterventionState({
           visible: false,
           errorMessage: "",
@@ -334,20 +341,17 @@ export default function KasirScreen() {
           Haptics.NotificationFeedbackType.Success
         ).catch(() => {});
 
-        setStatusNotice(
-          outcome.paperNearEnd
-            ? {
-                variant: "warning",
-                title: `Struk ${orderToPrint.orderNumber} Dicetak (Kertas Menipis)`,
-                message:
-                  "Peringatan: Sensor mendeteksi kertas printer thermal hampir habis.",
-              }
-            : {
-                variant: "success",
-                title: "Transaksi Berhasil Dicetak",
-                message: `Nota ${orderToPrint.orderNumber} sejumlah ${formatRupiah(orderToPrint.grandTotal)} (${activeCopies}x) selesai.`,
-              }
-        );
+        // Tampilkan centang sukses di dalam modal tanpa memunculkan banner permanen di Kasir
+        setStatusNotice(null);
+        setPrintSuccess(true);
+        setPreviewVisible(true);
+        if (successTimerRef.current) {
+          clearTimeout(successTimerRef.current);
+        }
+        successTimerRef.current = setTimeout(() => {
+          setPreviewVisible(false);
+          setPrintSuccess(false);
+        }, 950);
         return;
       }
 
@@ -400,10 +404,11 @@ export default function KasirScreen() {
     });
 
     waLogSentRef.current = false;
+    setPrintSuccess(false);
     setPendingOrder(order);
     setPendingOrderTabId(activeTab.id);
 
-    if (storeSettings?.previewReceiptBeforePrint === false) {
+    if (!previewBeforePrint) {
       await runPrintFlow(order, activeTab.id, undefined, chosenCopies);
       return;
     }
@@ -1324,9 +1329,11 @@ export default function KasirScreen() {
         copies={printCopies}
         printerMode={printerMode}
         isSubmitting={isPrinting}
-        onChangeCopies={setPrintCopies}
-        onChangePaperWidth={setBluetoothPaperWidth}
-        onClose={() => setPreviewVisible(false)}
+        printSuccess={printSuccess}
+        onClose={() => {
+          setPrintSuccess(false);
+          setPreviewVisible(false);
+        }}
         onConfirmPrint={() => {
           if (pendingOrder && pendingOrderTabId) {
             void runPrintFlow(pendingOrder, pendingOrderTabId);

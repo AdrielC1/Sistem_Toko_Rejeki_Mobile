@@ -1,5 +1,7 @@
+import { formatWibDateTime } from "@/domain/format";
 import type { CompletedOrder } from "@/domain/pricing";
 import { apiRequestWithFailover } from "@/services/api/apiClient";
+import { useCatalogScopeStore } from "@/store/catalogScopeStore";
 import type { ServerRoute, ServerUrlConfig, StoreSettings } from "@/types";
 
 export interface PrintDiagnosticInfo {
@@ -24,6 +26,27 @@ interface RawPrintResponseBody {
   message?: string;
 }
 
+function mapOrderItemsForServer(items: CompletedOrder["items"]) {
+  return items.map((item) => {
+    const isWholesale =
+      !item.isCustomPrice &&
+      typeof item.baseUnitPrice === "number" &&
+      item.effectiveUnitPrice < item.baseUnitPrice &&
+      (item.wholesaleSavings ?? 0) > 0;
+    return {
+      productId: item.productId,
+      name: item.productName,
+      unit: item.unitName,
+      qty: item.quantity,
+      unitPrice: item.effectiveUnitPrice,
+      total: item.subtotal,
+      ...(isWholesale
+        ? { originalPrice: item.baseUnitPrice, isWholesale: true }
+        : {}),
+    };
+  });
+}
+
 export async function submitServerPrintJob(
   config: ServerUrlConfig,
   params: {
@@ -32,11 +55,23 @@ export async function submitServerPrintJob(
     settings?: StoreSettings | null;
   }
 ): Promise<ServerPrintOutcome> {
+  const serverOrder = {
+    orderId: params.order.orderNumber,
+    invoiceNumber: params.order.orderNumber,
+    date: formatWibDateTime(params.order.date),
+    items: mapOrderItemsForServer(params.order.items),
+    subtotal: params.order.subtotal,
+    discount: params.order.discount,
+    grandTotal: params.order.grandTotal,
+    cashGiven: params.order.cashGiven,
+    change: params.order.change,
+  };
+
   const result = await apiRequestWithFailover<unknown>(config, "/api/print", {
     method: "POST",
     timeoutMs: 15000,
     body: JSON.stringify({
-      order: params.order,
+      order: serverOrder,
       copies: params.copies,
       ...(params.settings ? { settings: params.settings } : {}),
     }),
@@ -123,6 +158,9 @@ export async function submitWhatsAppOrderLog(
   order: CompletedOrder
 ): Promise<{ ok: boolean }> {
   try {
+    const scope = useCatalogScopeStore.getState().scope;
+    const sourceLabel = scope === "mini" ? "Katalog Mini" : "Katalog Utama";
+
     const result = await apiRequestWithFailover<unknown>(
       config,
       "/api/wa-log",
@@ -131,8 +169,9 @@ export async function submitWhatsAppOrderLog(
         timeoutMs: 8000,
         body: JSON.stringify({
           storeName: order.storeName,
+          sourceLabel,
           date: order.date,
-          items: order.items,
+          items: mapOrderItemsForServer(order.items),
           subtotal: order.subtotal,
           discount: order.discount,
           grandTotal: order.grandTotal,

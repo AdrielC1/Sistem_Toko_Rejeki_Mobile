@@ -118,8 +118,19 @@ describe("printApi (/api/print, /api/print/flush, /api/wa-log)", () => {
     const [, waInit] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
     expect(JSON.parse(String(waInit.body))).toMatchObject({
       storeName: "Toko Rejeki",
+      sourceLabel: "Katalog Mini",
       date: "2026-11-19T03:10:00.000Z",
       grandTotal: 125000,
+      items: [
+        {
+          productId: "p-1",
+          name: "Beras 5kg",
+          unit: "Sak",
+          qty: 2,
+          unitPrice: 65000,
+          total: 130000,
+        },
+      ],
     });
   });
 });

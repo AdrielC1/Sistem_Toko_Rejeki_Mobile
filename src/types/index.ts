@@ -8,12 +8,18 @@ export interface AuthSessionUser {
   sessionStamp?: string;
 }
 
-export type ReceiptFontSize = "sm" | "md" | "lg";
+export type ReceiptFontSize = "sm" | "md" | "lg" | "small" | "normal" | "medium" | "large";
 
 export interface ReceiptLine {
-  text: string;
-  align: "left" | "center" | "right";
+  id?: string;
+  type?: "text" | "key-value" | "separator";
+  text?: string;
+  label?: string;
+  value?: string;
+  separatorChar?: string;
+  align?: "left" | "center" | "right";
   bold?: boolean;
+  size?: ReceiptFontSize;
   fontSize?: ReceiptFontSize;
 }
 
@@ -22,13 +28,25 @@ export interface ReceiptItemConfig {
   showUnitPrice?: boolean;
   showDiscountLine?: boolean;
   showWholesaleBadge?: boolean;
+  itemNameSize?: "small" | "normal" | "medium" | "large";
+  itemNameBold?: boolean;
+  itemPriceSize?: "small" | "normal" | "medium" | "large";
+  layoutStyle?: "standard-2-line" | "compact-1-line";
+  showWholesaleDiscountPerItem?: boolean;
+  showWholesaleDiscountSummary?: boolean;
+  showSeparatorBetweenItems?: boolean;
+  subtotalSize?: "small" | "normal" | "medium" | "large";
+  subtotalBold?: boolean;
+  totalSize?: "small" | "normal" | "medium" | "large";
+  totalBold?: boolean;
 }
 
 export interface ReceiptSection {
   id: string;
-  type: "header" | "meta" | "items" | "totals" | "footer" | "custom";
+  type?: "header" | "meta" | "items" | "totals" | "footer" | "custom";
+  sectionType?: "header" | "footer";
   title?: string;
-  enabled: boolean;
+  enabled?: boolean;
   lines?: ReceiptLine[];
 }
 

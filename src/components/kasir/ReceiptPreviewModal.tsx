@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Printer, X } from "lucide-react-native";
+import { CheckCircle2, Printer, X } from "lucide-react-native";
 import type { CompletedOrder } from "@/domain/pricing";
 import { buildReceiptRenderLines } from "@/domain/receiptLayout";
 import {
@@ -24,27 +24,20 @@ export interface ReceiptPreviewModalProps {
   copies: 1 | 2;
   printerMode: PrinterDeviceMode;
   isSubmitting: boolean;
-  onChangeCopies: (copies: 1 | 2) => void;
+  printSuccess?: boolean;
+  onChangeCopies?: (copies: 1 | 2) => void;
   onChangePaperWidth?: (width: 58 | 80) => void;
   onClose: () => void;
   onConfirmPrint: () => void;
 }
-
-const MODE_LABELS: Record<PrinterDeviceMode, string> = {
-  server: "Printer Server Toko",
-  bluetooth: "Thermal Bluetooth",
-  system: "Cetak Sistem HP",
-};
 
 export function ReceiptPreviewModal({
   visible,
   order,
   paperWidthMm = 58,
   copies,
-  printerMode,
   isSubmitting,
-  onChangeCopies,
-  onChangePaperWidth,
+  printSuccess = false,
   onClose,
   onConfirmPrint,
 }: ReceiptPreviewModalProps) {
@@ -63,7 +56,7 @@ export function ReceiptPreviewModal({
       animationType="fade"
       statusBarTranslucent
       onRequestClose={() => {
-        if (!isSubmitting) {
+        if (!isSubmitting && !printSuccess) {
           onClose();
         }
       }}
@@ -74,177 +67,130 @@ export function ReceiptPreviewModal({
           testID="receipt-preview-card"
           style={styles.sheet}
         >
-          <View style={styles.topBar}>
-            <View style={styles.titleRow}>
-              <Printer size={18} color={TOKENS.colors.primary} />
-              <Text accessibilityRole="header" style={styles.titleText}>
-                Pratinjau Struk ({isWidePaper ? "80mm" : "58mm"})
-              </Text>
+          {printSuccess ? (
+            <View testID="receipt-print-success" style={styles.successStateWrap}>
+              <View style={styles.successCircle}>
+                <CheckCircle2 size={54} color={TOKENS.colors.successText} />
+              </View>
+              <Text style={styles.successTitle}>Struk Berhasil Dicetak</Text>
             </View>
-            <Pressable
-              testID="receipt-preview-close"
-              accessibilityRole="button"
-              accessibilityLabel="Tutup pratinjau struk"
-              disabled={isSubmitting}
-              onPress={onClose}
-              style={styles.closeBtn}
-            >
-              <X size={20} color={TOKENS.colors.onSurfaceVariant} />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            style={styles.paperScroll}
-            contentContainerStyle={styles.paperScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <View
-              testID="receipt-paper-frame"
-              style={[
-                styles.paperFrame,
-                isWidePaper ? styles.paper80 : styles.paper58,
-              ]}
-            >
-              {lines.map((line) => {
-                if (line.kind === "divider") {
-                  return <View key={line.key} style={styles.paperDivider} />;
-                }
-                if (line.kind === "kv") {
-                  return (
-                    <View key={line.key} style={styles.paperKvRow}>
-                      <Text
-                        style={[
-                          styles.paperText,
-                          styles.paperKvLeft,
-                          line.bold && styles.paperBold,
-                          line.fontSize === "lg" && styles.paperLg,
-                        ]}
-                      >
-                        {line.leftText}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.paperText,
-                          styles.paperKvRight,
-                          line.bold && styles.paperBold,
-                          line.fontSize === "lg" && styles.paperLg,
-                        ]}
-                      >
-                        {line.rightText}
-                      </Text>
-                    </View>
-                  );
-                }
-                return (
-                  <Text
-                    key={line.key}
-                    style={[
-                      styles.paperText,
-                      line.align === "center" && styles.alignCenter,
-                      line.align === "right" && styles.alignRight,
-                      line.bold && styles.paperBold,
-                      line.fontSize === "lg" && styles.paperLg,
-                    ]}
-                  >
-                    {line.text}
+          ) : (
+            <>
+              <View style={styles.topBar}>
+                <View style={styles.titleRow}>
+                  <Printer size={18} color={TOKENS.colors.primary} />
+                  <Text accessibilityRole="header" style={styles.titleText}>
+                    {`Pratinjau Struk (${isWidePaper ? "80mm" : "58mm"} · ${copies}x)`}
                   </Text>
-                );
-              })}
-            </View>
-          </ScrollView>
+                </View>
+                <Pressable
+                  testID="receipt-preview-close"
+                  accessibilityRole="button"
+                  accessibilityLabel="Tutup pratinjau struk"
+                  disabled={isSubmitting}
+                  onPress={onClose}
+                  style={styles.closeBtn}
+                >
+                  <X size={20} color={TOKENS.colors.onSurfaceVariant} />
+                </Pressable>
+              </View>
 
-          <View style={styles.controlsArea}>
-            <View style={styles.metaBar}>
-              <Text style={styles.metaLabel}>
-                {`Mode: ${MODE_LABELS[printerMode]}`}
-              </Text>
-              <View style={styles.metaRightControls}>
-                {onChangePaperWidth ? (
-                  <View style={styles.copiesGroup}>
-                    <Text style={styles.metaLabel}>Kertas:</Text>
-                    {([58, 80] as const).map((w) => {
-                      const selected =
-                        (isWidePaper && w === 80) || (!isWidePaper && w === 58);
+              <ScrollView
+                style={styles.paperScroll}
+                contentContainerStyle={styles.paperScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View
+                  testID="receipt-paper-frame"
+                  style={[
+                    styles.paperFrame,
+                    isWidePaper ? styles.paper80 : styles.paper58,
+                  ]}
+                >
+                  {lines.map((line) => {
+                    if (line.kind === "divider") {
+                      return <View key={line.key} style={styles.paperDivider} />;
+                    }
+                    const isLg =
+                      line.size === "large" || line.fontSize === "lg";
+                    const isMd = line.size === "medium";
+                    const isSm =
+                      line.size === "small" || line.fontSize === "sm";
+
+                    if (line.kind === "kv") {
                       return (
-                        <Pressable
-                          key={w}
-                          testID={`receipt-paper-${w}`}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          disabled={isSubmitting}
-                          onPress={() => onChangePaperWidth(w)}
-                          style={[
-                            styles.copyChip,
-                            selected && styles.copyChipSelected,
-                          ]}
-                        >
+                        <View key={line.key} style={styles.paperKvRow}>
                           <Text
                             style={[
-                              styles.copyChipText,
-                              selected && styles.copyChipTextSelected,
+                              styles.paperText,
+                              styles.paperKvLeft,
+                              line.bold && styles.paperBold,
+                              isSm && styles.paperSm,
+                              isMd && styles.paperMd,
+                              isLg && styles.paperLg,
                             ]}
                           >
-                            {`${w}mm`}
+                            {line.leftText}
                           </Text>
-                        </Pressable>
+                          <Text
+                            style={[
+                              styles.paperText,
+                              styles.paperKvRight,
+                              line.bold && styles.paperBold,
+                              isSm && styles.paperSm,
+                              isMd && styles.paperMd,
+                              isLg && styles.paperLg,
+                            ]}
+                          >
+                            {line.rightText}
+                          </Text>
+                        </View>
                       );
-                    })}
-                  </View>
-                ) : null}
-
-                <View style={styles.copiesGroup}>
-                  <Text style={styles.metaLabel}>Salinan:</Text>
-                  {([1, 2] as const).map((val) => {
-                    const selected = copies === val;
+                    }
                     return (
-                      <Pressable
-                        key={val}
-                        testID={`receipt-copies-${val}`}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        disabled={isSubmitting}
-                        onPress={() => onChangeCopies(val)}
+                      <Text
+                        key={line.key}
                         style={[
-                          styles.copyChip,
-                          selected && styles.copyChipSelected,
+                          styles.paperText,
+                          line.align === "center" && styles.alignCenter,
+                          line.align === "right" && styles.alignRight,
+                          line.bold && styles.paperBold,
+                          isSm && styles.paperSm,
+                          isMd && styles.paperMd,
+                          isLg && styles.paperLg,
                         ]}
                       >
-                        <Text
-                          style={[
-                            styles.copyChipText,
-                            selected && styles.copyChipTextSelected,
-                          ]}
-                        >
-                          {`${val}x`}
-                        </Text>
-                      </Pressable>
+                        {line.text}
+                      </Text>
                     );
                   })}
                 </View>
-              </View>
-            </View>
+              </ScrollView>
 
-            <View style={styles.actionsRow}>
-              <SecondaryButton
-                testID="receipt-preview-cancel-button"
-                variant="tonal"
-                label="Batal"
-                disabled={isSubmitting}
-                onPress={onClose}
-                style={styles.actionBtn}
-              />
-              <PrimaryButton
-                testID="receipt-preview-confirm-button"
-                label={`Cetak ${copies}x`}
-                loading={isSubmitting}
-                loadingLabel="Mencetak..."
-                disabled={isSubmitting || !order}
-                icon={<Printer size={18} color={TOKENS.colors.onPrimary} />}
-                onPress={onConfirmPrint}
-                style={styles.actionBtn}
-              />
-            </View>
-          </View>
+              <View style={styles.controlsArea}>
+                <View style={styles.actionsRow}>
+                  <SecondaryButton
+                    testID="receipt-preview-cancel-button"
+                    variant="tonal"
+                    label="Batal"
+                    disabled={isSubmitting}
+                    onPress={onClose}
+                    style={styles.actionBtn}
+                  />
+                  <PrimaryButton
+                    testID="receipt-preview-confirm-button"
+                    label="Cetak"
+                    loading={isSubmitting}
+                    loadingLabel="Mencetak..."
+                    disabled={isSubmitting || !order}
+                    icon={<Printer size={18} color={TOKENS.colors.onPrimary} />}
+                    onPress={onConfirmPrint}
+                    style={styles.actionBtn}
+                  />
+                </View>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -265,6 +211,27 @@ const styles = StyleSheet.create({
     borderColor: TOKENS.colors.borderSubtle,
     maxHeight: "90%",
     overflow: "hidden",
+  },
+  successStateWrap: {
+    paddingVertical: 40,
+    paddingHorizontal: TOKENS.spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: TOKENS.spacing.md,
+  },
+  successCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: TOKENS.colors.successBg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  successTitle: {
+    fontFamily: FONT_FAMILY.heading,
+    fontSize: TOKENS.typography.heading,
+    color: TOKENS.colors.onSurface,
+    textAlign: "center",
   },
   topBar: {
     flexDirection: "row",
@@ -341,9 +308,17 @@ const styles = StyleSheet.create({
   paperBold: {
     fontFamily: FONT_FAMILY.monoSemiBold,
   },
+  paperSm: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  paperMd: {
+    fontSize: 14,
+    lineHeight: 19,
+  },
   paperLg: {
-    fontSize: TOKENS.typography.body,
-    lineHeight: TOKENS.lineHeight.body,
+    fontSize: 16,
+    lineHeight: 22,
   },
   alignCenter: {
     textAlign: "center",
@@ -355,55 +330,6 @@ const styles = StyleSheet.create({
     padding: TOKENS.spacing.md,
     borderTopWidth: 1,
     borderTopColor: TOKENS.colors.borderSubtle,
-    gap: TOKENS.spacing.md,
-  },
-  metaBar: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: TOKENS.spacing.sm,
-  },
-  metaRightControls: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: TOKENS.spacing.sm,
-  },
-  metaLabel: {
-    fontFamily: FONT_FAMILY.bodySemiBold,
-    fontSize: TOKENS.typography.label,
-    lineHeight: TOKENS.lineHeight.label,
-    color: TOKENS.colors.onSurfaceVariant,
-  },
-  copiesGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: TOKENS.spacing.xs,
-  },
-  copyChip: {
-    minWidth: TOKENS.spacing.touchTarget,
-    minHeight: TOKENS.spacing.touchTarget,
-    borderRadius: TOKENS.radii.sm,
-    borderWidth: 1,
-    borderColor: TOKENS.colors.borderSubtle,
-    backgroundColor: TOKENS.colors.surfaceContainerLow,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: TOKENS.spacing.sm,
-  },
-  copyChipSelected: {
-    backgroundColor: TOKENS.colors.primary,
-    borderColor: TOKENS.colors.primary,
-  },
-  copyChipText: {
-    fontFamily: FONT_FAMILY.monoSemiBold,
-    fontSize: TOKENS.typography.label,
-    lineHeight: TOKENS.lineHeight.label,
-    color: TOKENS.colors.onSurface,
-  },
-  copyChipTextSelected: {
-    color: TOKENS.colors.onPrimary,
   },
   actionsRow: {
     flexDirection: "row",

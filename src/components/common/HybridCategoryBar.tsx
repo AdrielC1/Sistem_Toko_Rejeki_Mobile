@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { LayoutGrid, Search, Star, X } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   MAX_PINNED_CATEGORIES,
   usePinnedCategoriesStore,
@@ -37,6 +38,7 @@ export function CategoryPickerModal({
   onSelect,
   onClose,
 }: CategoryPickerModalProps) {
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState<string>("");
   const pinnedIds = usePinnedCategoriesStore((s) => s.pinnedIds);
   const togglePin = usePinnedCategoriesStore((s) => s.togglePin);
@@ -84,7 +86,12 @@ export function CategoryPickerModal({
     >
       <View style={styles.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={styles.modalSheet}>
+        <View
+          style={[
+            styles.modalSheet,
+            { paddingBottom: Math.max(insets.bottom, 16) + 12 },
+          ]}
+        >
           <View style={styles.sheetHandle} />
 
           <View style={styles.modalHeader}>

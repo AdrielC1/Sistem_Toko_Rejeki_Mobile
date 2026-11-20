@@ -129,7 +129,7 @@ describe("KasirScreen POS workflow, wholesale pricing, preview & intervention", 
     // Checkout -> opens ReceiptPreviewModal
     await fireEvent.press(screen.getByTestId("kasir-checkout-button"));
     expect(screen.getByTestId("receipt-preview-modal")).toBeTruthy();
-    expect(screen.getByText("Pratinjau Struk (58mm)")).toBeTruthy();
+    expect(screen.getByText("Pratinjau Struk (58mm · 1x)")).toBeTruthy();
 
     // Print attempt 1 fails -> Intervention Modal opens
     fetchMock.mockResolvedValueOnce({
@@ -173,9 +173,8 @@ describe("KasirScreen POS workflow, wholesale pricing, preview & intervention", 
     await fireEvent.press(screen.getByTestId("printer-retry-button"));
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/Struk TRX-.*Dicetak \(Kertas Menipis\)/)
-      ).toBeTruthy();
+      expect(screen.getByTestId("receipt-print-success")).toBeTruthy();
+      expect(screen.getByText("Struk Berhasil Dicetak")).toBeTruthy();
     });
 
     const waCalls = fetchMock.mock.calls.filter(([u]) =>

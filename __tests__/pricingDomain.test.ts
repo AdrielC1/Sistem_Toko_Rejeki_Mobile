@@ -210,7 +210,8 @@ describe("Phase 3 POS pricing domain, ESC/POS builder, receipt layout, and Zusta
 
     const html = buildReceiptHtml(order, 80);
     expect(html).toContain("Toko Rejeki Utama");
-    expect(html).toContain("TRX-TEST-001");
+    expect(html).toContain("TOTAL");
+    expect(html).not.toContain("TRX-TEST-001");
 
     const bytes = buildEscPosReceiptBytes(order, {
       paperWidthMm: 58,

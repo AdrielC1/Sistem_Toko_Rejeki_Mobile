@@ -1,21 +1,20 @@
 import { formatRupiah, formatWibDateTime } from "@/domain/format";
 import type { CompletedOrder } from "@/domain/pricing";
-import type { ReceiptItemConfig, ReceiptSection } from "@/types";
+import type {
+  ReceiptFontSize,
+  ReceiptItemConfig,
+  ReceiptLine,
+  ReceiptSection,
+} from "@/types";
+
+export type NormalizedReceiptSize = "small" | "normal" | "medium" | "large";
 
 export const DEFAULT_RECEIPT_SECTIONS: ReceiptSection[] = [
-  { id: "header", type: "header", title: "Header Toko", enabled: true },
-  { id: "meta", type: "meta", title: "Info Nota", enabled: true },
+  { id: "header", type: "header", sectionType: "header", title: "Header Toko", enabled: true },
   { id: "items", type: "items", title: "Daftar Belanja", enabled: true },
   { id: "totals", type: "totals", title: "Ringkasan Total", enabled: true },
-  { id: "footer", type: "footer", title: "Catatan Kaki", enabled: true },
+  { id: "footer", type: "footer", sectionType: "footer", title: "Catatan Kaki", enabled: true },
 ];
-
-export const DEFAULT_RECEIPT_ITEM_CONFIG: Required<ReceiptItemConfig> = {
-  showSku: false,
-  showUnitPrice: true,
-  showDiscountLine: true,
-  showWholesaleBadge: true,
-};
 
 export interface RenderedReceiptLine {
   key: string;
@@ -23,236 +22,351 @@ export interface RenderedReceiptLine {
   align?: "left" | "center" | "right";
   bold?: boolean;
   fontSize?: "sm" | "md" | "lg";
+  size?: NormalizedReceiptSize;
   text?: string;
   leftText?: string;
   rightText?: string;
 }
 
-export function resolveReceiptSections(
-  sections?: ReceiptSection[]
-): ReceiptSection[] {
-  return sections && sections.length > 0 ? sections : DEFAULT_RECEIPT_SECTIONS;
+export function normalizeReceiptSize(
+  raw?: ReceiptFontSize
+): NormalizedReceiptSize {
+  if (raw === "small" || raw === "sm") {
+    return "small";
+  }
+  if (raw === "medium") {
+    return "medium";
+  }
+  if (raw === "large" || raw === "lg") {
+    return "large";
+  }
+  return "normal";
 }
 
-export function resolveReceiptItemConfig(
-  cfg?: ReceiptItemConfig
-): Required<ReceiptItemConfig> {
-  return {
-    showSku: cfg?.showSku ?? DEFAULT_RECEIPT_ITEM_CONFIG.showSku,
-    showUnitPrice:
-      cfg?.showUnitPrice ?? DEFAULT_RECEIPT_ITEM_CONFIG.showUnitPrice,
-    showDiscountLine:
-      cfg?.showDiscountLine ?? DEFAULT_RECEIPT_ITEM_CONFIG.showDiscountLine,
-    showWholesaleBadge:
-      cfg?.showWholesaleBadge ?? DEFAULT_RECEIPT_ITEM_CONFIG.showWholesaleBadge,
-  };
+function toLegacyFontSize(size: NormalizedReceiptSize): "sm" | "md" | "lg" {
+  if (size === "small") {
+    return "sm";
+  }
+  if (size === "medium" || size === "large") {
+    return "lg";
+  }
+  return "md";
+}
+
+export function getWidthForReceiptSize(
+  baseCols: number,
+  size: NormalizedReceiptSize = "normal"
+): number {
+  const totalDots = baseCols * 12;
+  if (size === "small") {
+    return Math.floor(totalDots / 9);
+  }
+  if (size === "medium") {
+    return Math.floor(totalDots / 18);
+  }
+  if (size === "large") {
+    return Math.floor(totalDots / 24);
+  }
+  return baseCols;
 }
 
 function interpolatePlaceholders(text: string, order: CompletedOrder): string {
+  const formattedDate = formatWibDateTime(order.date);
   return text
+    .replace(/\{invoice\}/g, order.orderNumber)
+    .replace(/\{tanggal\}/g, formattedDate)
+    .replace(/\{kasir\}/g, order.cashierName)
     .replace(/\{\{storeName\}\}/g, order.storeName)
     .replace(/\{\{orderNumber\}\}/g, order.orderNumber)
     .replace(/\{\{cashierName\}\}/g, order.cashierName)
-    .replace(/\{\{date\}\}/g, formatWibDateTime(order.date))
+    .replace(/\{\{date\}\}/g, formattedDate)
     .replace(/\{\{grandTotal\}\}/g, formatRupiah(order.grandTotal));
+}
+
+function pushCustomSectionLines(
+  lines: ReceiptLine[],
+  order: CompletedOrder,
+  out: RenderedReceiptLine[],
+  nextSeq: () => number
+) {
+  for (const line of lines) {
+    if (line.type === "separator") {
+      out.push({
+        key: `sep-${nextSeq()}`,
+        kind: "divider",
+        text: line.separatorChar || "-",
+      });
+      continue;
+    }
+
+    const size = normalizeReceiptSize(line.size ?? line.fontSize);
+    const fontSize = toLegacyFontSize(size);
+    const align = line.align ?? "left";
+    const bold = Boolean(line.bold);
+
+    if (line.type === "key-value") {
+      out.push({
+        key: `ckv-${nextSeq()}`,
+        kind: "kv",
+        align,
+        bold,
+        size,
+        fontSize,
+        leftText: interpolatePlaceholders(line.label ?? "", order),
+        rightText: interpolatePlaceholders(line.value ?? "", order),
+      });
+      continue;
+    }
+
+    out.push({
+      key: `ctxt-${nextSeq()}`,
+      kind: "text",
+      align,
+      bold,
+      size,
+      fontSize,
+      text: interpolatePlaceholders(line.text ?? "", order),
+    });
+  }
 }
 
 export function buildReceiptRenderLines(
   order: CompletedOrder
 ): RenderedReceiptLine[] {
-  const sections = resolveReceiptSections(order.receiptSections);
-  const itemCfg = resolveReceiptItemConfig(order.receiptItemConfig);
-  const lines: RenderedReceiptLine[] = [];
+  const sections = order.receiptSections ?? [];
+  const itemCfg: ReceiptItemConfig = order.receiptItemConfig ?? {};
+  const out: RenderedReceiptLine[] = [];
   let seq = 0;
-
-  const pushDivider = () => {
+  const nextSeq = () => {
     seq += 1;
-    lines.push({ key: `div-${seq}`, kind: "divider" });
+    return seq;
   };
 
-  for (const section of sections) {
-    if (!section.enabled) {
-      continue;
-    }
+  const pushDivider = () => {
+    out.push({ key: `div-${nextSeq()}`, kind: "divider" });
+  };
 
-    if (section.type === "header") {
-      seq += 1;
-      lines.push({
-        key: `hdr-name-${seq}`,
+  const headerSection = sections.find(
+    (s) =>
+      (s.sectionType === "header" || s.type === "header") &&
+      s.enabled !== false
+  );
+  const footerSection = sections.find(
+    (s) =>
+      (s.sectionType === "footer" || s.type === "footer") &&
+      s.enabled !== false
+  );
+
+  // 1. Header Section (dari DB atau default web tanpa No. Nota paksa)
+  if (headerSection?.lines && headerSection.lines.length > 0) {
+    pushCustomSectionLines(headerSection.lines, order, out, nextSeq);
+  } else {
+    out.push({
+      key: `hdr-name-${nextSeq()}`,
+      kind: "text",
+      align: "center",
+      bold: true,
+      size: "large",
+      fontSize: "lg",
+      text: order.storeName || "TOKO REJEKI",
+    });
+    if (order.storeAddress) {
+      out.push({
+        key: `hdr-addr-${nextSeq()}`,
         kind: "text",
         align: "center",
-        bold: true,
-        fontSize: "lg",
-        text: order.storeName,
+        size: "normal",
+        fontSize: "md",
+        text: order.storeAddress,
       });
-      if (order.storeAddress) {
-        seq += 1;
-        lines.push({
-          key: `hdr-addr-${seq}`,
-          kind: "text",
-          align: "center",
-          fontSize: "sm",
-          text: order.storeAddress,
-        });
-      }
-      if (order.storePhone) {
-        seq += 1;
-        lines.push({
-          key: `hdr-phone-${seq}`,
-          kind: "text",
-          align: "center",
-          fontSize: "sm",
-          text: `Telp: ${order.storePhone}`,
-        });
-      }
-      if (section.lines) {
-        for (const customLine of section.lines) {
-          seq += 1;
-          lines.push({
-            key: `hdr-line-${seq}`,
-            kind: "text",
-            align: customLine.align,
-            bold: customLine.bold,
-            fontSize: customLine.fontSize ?? "sm",
-            text: interpolatePlaceholders(customLine.text, order),
-          });
-        }
-      }
-      pushDivider();
-    } else if (section.type === "meta") {
-      seq += 1;
-      lines.push({
-        key: `meta-no-${seq}`,
+    }
+    if (order.storePhone) {
+      out.push({
+        key: `hdr-phone-${nextSeq()}`,
+        kind: "text",
+        align: "center",
+        size: "normal",
+        fontSize: "md",
+        text: `Telp: ${order.storePhone}`,
+      });
+    }
+    pushDivider();
+    out.push({
+      key: `hdr-date-${nextSeq()}`,
+      kind: "text",
+      align: "left",
+      size: "normal",
+      fontSize: "md",
+      text: `Tgl: ${formatWibDateTime(order.date)}`,
+    });
+    pushDivider();
+  }
+
+  // 2. Rincian Produk
+  const itemNameSize = normalizeReceiptSize(itemCfg.itemNameSize);
+  const itemNameBold = itemCfg.itemNameBold !== false;
+  const itemPriceSize = normalizeReceiptSize(itemCfg.itemPriceSize);
+  const layoutStyle = itemCfg.layoutStyle ?? "standard-2-line";
+  const showUnitPrice = itemCfg.showUnitPrice !== false;
+  const showDiscountLine = itemCfg.showDiscountLine !== false;
+  const showWholesaleBadge = itemCfg.showWholesaleBadge !== false;
+  const showWholesalePerItem = itemCfg.showWholesaleDiscountPerItem !== false;
+  const showWholesaleSummary = itemCfg.showWholesaleDiscountSummary !== false;
+  const showSeparatorBetweenItems = Boolean(itemCfg.showSeparatorBetweenItems);
+
+  let totalWholesaleSavings = 0;
+
+  for (let i = 0; i < order.items.length; i++) {
+    const item = order.items[i];
+    const isLastItem = i === order.items.length - 1;
+    const itemSavings = item.wholesaleSavings ?? 0;
+    totalWholesaleSavings += itemSavings;
+
+    const badgeText =
+      showWholesaleBadge && itemSavings > 0
+        ? " [Grosir]"
+        : item.isCustomPrice
+          ? " [Khusus]"
+          : "";
+
+    if (layoutStyle === "compact-1-line") {
+      out.push({
+        key: `item-compact-${nextSeq()}`,
         kind: "kv",
-        leftText: "No. Nota",
-        rightText: order.orderNumber,
+        align: "left",
+        bold: itemNameBold,
+        size: itemNameSize,
+        fontSize: toLegacyFontSize(itemNameSize),
+        leftText: `${item.productName}${badgeText} ${item.quantity}x${item.effectiveUnitPrice.toLocaleString("id-ID")}`,
+        rightText: formatRupiah(item.subtotal),
       });
-      seq += 1;
-      lines.push({
-        key: `meta-date-${seq}`,
-        kind: "kv",
-        leftText: "Tanggal",
-        rightText: formatWibDateTime(order.date),
+    } else {
+      out.push({
+        key: `item-title-${nextSeq()}`,
+        kind: "text",
+        align: "left",
+        bold: itemNameBold,
+        size: itemNameSize,
+        fontSize: toLegacyFontSize(itemNameSize),
+        text: `${item.productName}${badgeText}`,
       });
-      seq += 1;
-      lines.push({
-        key: `meta-cashier-${seq}`,
-        kind: "kv",
-        leftText: "Kasir",
-        rightText: order.cashierName,
-      });
-      pushDivider();
-    } else if (section.type === "items") {
-      for (const item of order.items) {
-        seq += 1;
-        const badgeText =
-          itemCfg.showWholesaleBadge && (item.wholesaleSavings ?? 0) > 0
-            ? " [Grosir]"
-            : item.isCustomPrice
-              ? " [Khusus]"
-              : "";
-        lines.push({
-          key: `item-title-${seq}`,
+
+      if (itemCfg.showSku && item.sku) {
+        out.push({
+          key: `item-sku-${nextSeq()}`,
           kind: "text",
           align: "left",
-          bold: true,
+          size: "small",
           fontSize: "sm",
-          text: `${item.productName}${badgeText}`,
-        });
-
-        if (itemCfg.showSku && item.sku) {
-          seq += 1;
-          lines.push({
-            key: `item-sku-${seq}`,
-            kind: "text",
-            align: "left",
-            fontSize: "sm",
-            text: `SKU: ${item.sku}`,
-          });
-        }
-
-        const qtyDesc = itemCfg.showUnitPrice
-          ? `${item.quantity} ${item.unitName} x ${formatRupiah(item.effectiveUnitPrice)}`
-          : `${item.quantity} ${item.unitName}`;
-
-        seq += 1;
-        lines.push({
-          key: `item-kv-${seq}`,
-          kind: "kv",
-          leftText: qtyDesc,
-          rightText: formatRupiah(item.subtotal),
+          text: `SKU: ${item.sku}`,
         });
       }
-      pushDivider();
-    } else if (section.type === "totals") {
-      seq += 1;
-      lines.push({
-        key: `tot-sub-${seq}`,
+
+      const qtyDesc = showUnitPrice
+        ? `${item.quantity} ${item.unitName} x ${formatRupiah(item.effectiveUnitPrice)}`
+        : `${item.quantity} ${item.unitName}`;
+
+      out.push({
+        key: `item-kv-${nextSeq()}`,
         kind: "kv",
-        leftText: "Subtotal",
-        rightText: formatRupiah(order.subtotal),
+        align: "left",
+        bold: false,
+        size: itemPriceSize,
+        fontSize: toLegacyFontSize(itemPriceSize),
+        leftText: qtyDesc,
+        rightText: formatRupiah(item.subtotal),
       });
-      if (itemCfg.showDiscountLine && order.discount > 0) {
-        seq += 1;
-        lines.push({
-          key: `tot-disc-${seq}`,
-          kind: "kv",
-          leftText: "Potongan Harga",
-          rightText: `-${formatRupiah(order.discount)}`,
-        });
-      }
-      seq += 1;
-      lines.push({
-        key: `tot-grand-${seq}`,
+    }
+
+    if (showWholesalePerItem && itemSavings > 0) {
+      out.push({
+        key: `item-ws-${nextSeq()}`,
         kind: "kv",
-        bold: true,
-        fontSize: "lg",
-        leftText: "TOTAL BAYAR",
-        rightText: formatRupiah(order.grandTotal),
+        align: "left",
+        bold: false,
+        size: itemPriceSize,
+        fontSize: toLegacyFontSize(itemPriceSize),
+        leftText: `  Hemat Grosir`,
+        rightText: `(- ${formatRupiah(Math.round(itemSavings))})`,
       });
-      pushDivider();
-    } else if (section.type === "footer") {
-      const note =
-        order.receiptFooterNote?.trim() ||
-        "Terima kasih sudah berbelanja di toko kami.";
-      seq += 1;
-      lines.push({
-        key: `ftr-note-${seq}`,
-        kind: "text",
-        align: "center",
-        fontSize: "sm",
-        text: note,
-      });
-      if (section.lines) {
-        for (const line of section.lines) {
-          seq += 1;
-          lines.push({
-            key: `ftr-line-${seq}`,
-            kind: "text",
-            align: line.align,
-            bold: line.bold,
-            fontSize: line.fontSize ?? "sm",
-            text: interpolatePlaceholders(line.text, order),
-          });
-        }
-      }
-    } else if (section.type === "custom" && section.lines) {
-      for (const line of section.lines) {
-        seq += 1;
-        lines.push({
-          key: `cst-line-${seq}`,
-          kind: "text",
-          align: line.align,
-          bold: line.bold,
-          fontSize: line.fontSize ?? "sm",
-          text: interpolatePlaceholders(line.text, order),
-        });
-      }
+    }
+
+    if (showSeparatorBetweenItems && !isLastItem) {
       pushDivider();
     }
   }
 
-  return lines;
+  pushDivider();
+
+  // 3. Subtotal, Potongan, TOTAL (mengikuti ukuran & bold dari DB)
+  const subtotalSize = normalizeReceiptSize(itemCfg.subtotalSize);
+  const subtotalBold = itemCfg.subtotalBold === true;
+  const totalSize = normalizeReceiptSize(itemCfg.totalSize ?? "large");
+  const totalBold = itemCfg.totalBold !== false;
+
+  if (showDiscountLine && order.discount > 0) {
+    out.push({
+      key: `tot-sub-${nextSeq()}`,
+      kind: "kv",
+      bold: subtotalBold,
+      size: subtotalSize,
+      fontSize: toLegacyFontSize(subtotalSize),
+      leftText: "Subtotal",
+      rightText: formatRupiah(order.subtotal),
+    });
+    out.push({
+      key: `tot-disc-${nextSeq()}`,
+      kind: "kv",
+      bold: subtotalBold,
+      size: subtotalSize,
+      fontSize: toLegacyFontSize(subtotalSize),
+      leftText: "Potongan",
+      rightText: `-${formatRupiah(order.discount)}`,
+    });
+  }
+
+  out.push({
+    key: `tot-grand-${nextSeq()}`,
+    kind: "kv",
+    bold: totalBold,
+    size: totalSize,
+    fontSize: toLegacyFontSize(totalSize),
+    leftText: "TOTAL",
+    rightText: formatRupiah(order.grandTotal),
+  });
+
+  if (showWholesaleSummary && totalWholesaleSavings > 0) {
+    out.push({
+      key: `tot-ws-${nextSeq()}`,
+      kind: "kv",
+      bold: subtotalBold,
+      size: subtotalSize,
+      fontSize: toLegacyFontSize(subtotalSize),
+      leftText: "Total Hemat Grosir",
+      rightText: formatRupiah(totalWholesaleSavings),
+    });
+  }
+
+  pushDivider();
+
+  // 4. Footer Section (dari DB atau default)
+  if (footerSection?.lines && footerSection.lines.length > 0) {
+    pushCustomSectionLines(footerSection.lines, order, out, nextSeq);
+  } else {
+    const note =
+      order.receiptFooterNote?.trim() ||
+      "Terima kasih sudah berbelanja di toko kami.";
+    out.push({
+      key: `ftr-note-${nextSeq()}`,
+      kind: "text",
+      align: "center",
+      size: "normal",
+      fontSize: "md",
+      text: note,
+    });
+  }
+
+  return out;
 }
 
 function escapeHtml(raw: string): string {
@@ -275,17 +389,22 @@ export function buildReceiptHtml(
       if (line.kind === "divider") {
         return `<div class="divider"></div>`;
       }
+      const sizeCls =
+        line.size === "large"
+          ? "lg"
+          : line.size === "medium"
+            ? "md-lg"
+            : line.size === "small"
+              ? "sm"
+              : "";
       if (line.kind === "kv") {
-        const cls = line.bold ? "kv bold" : "kv";
+        const cls = ["kv", line.bold ? "bold" : "", sizeCls]
+          .filter(Boolean)
+          .join(" ");
         return `<div class="${cls}"><span>${escapeHtml(line.leftText ?? "")}</span><span>${escapeHtml(line.rightText ?? "")}</span></div>`;
       }
       const align = line.align ?? "left";
-      const cls = [
-        "line",
-        `align-${align}`,
-        line.bold ? "bold" : "",
-        line.fontSize === "lg" ? "lg" : "",
-      ]
+      const cls = ["line", `align-${align}`, line.bold ? "bold" : "", sizeCls]
         .filter(Boolean)
         .join(" ");
       return `<div class="${cls}">${escapeHtml(line.text ?? "")}</div>`;
@@ -311,7 +430,9 @@ export function buildReceiptHtml(
   .align-right { text-align: right; }
   .align-left { text-align: left; }
   .bold { font-weight: 700; }
-  .lg { font-size: 14px; }
+  .sm { font-size: 9px; }
+  .md-lg { font-size: 13px; }
+  .lg { font-size: 15px; }
   .kv { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 2px; }
   .divider { border-top: 1px dashed #000; margin: 6px 0; }
 </style>

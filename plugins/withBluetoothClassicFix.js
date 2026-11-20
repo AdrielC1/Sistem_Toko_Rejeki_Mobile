@@ -1,5 +1,6 @@
 const {
   withAppBuildGradle,
+  withGradleProperties,
   withProjectBuildGradle,
 } = require("expo/config-plugins");
 
@@ -14,8 +15,27 @@ const APP_MARKER = "// withBluetoothClassicFix: Windows short CMake staging";
  *    inside `android/app/.cxx` can exceed the 260-char MAX_PATH limit. Setting
  *    `buildStagingDirectory file("C:/cx")` inside `android/app/build.gradle` on
  *    Windows keeps all Ninja object paths under 250 chars.
+ * 3. Disables `edgeToEdgeEnabled` in `gradle.properties` so older POS Android
+ *    devices keep a solid system navigation bar with visible dark/contrast buttons.
  */
 module.exports = function withBluetoothClassicFix(config) {
+  config = withGradleProperties(config, (cfg) => {
+    const props = cfg.modResults;
+    const idx = props.findIndex(
+      (item) => item.type === "property" && item.key === "edgeToEdgeEnabled"
+    );
+    if (idx >= 0) {
+      props[idx].value = "false";
+    } else {
+      props.push({
+        type: "property",
+        key: "edgeToEdgeEnabled",
+        value: "false",
+      });
+    }
+    return cfg;
+  });
+
   config = withProjectBuildGradle(config, (cfg) => {
     if (cfg.modResults.contents.includes(PROJECT_MARKER)) {
       return cfg;
