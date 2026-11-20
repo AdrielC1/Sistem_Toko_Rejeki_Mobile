@@ -50,6 +50,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           "Aplikasi memerlukan akses Bluetooth untuk terhubung ke printer thermal kasir.",
       },
     ],
+    "./plugins/withBluetoothClassicFix",
     [
       "expo-splash-screen",
       {

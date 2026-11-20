@@ -27,7 +27,24 @@ Aplikasi kasir (POS) mobile mandiri berbasis **Expo (SDK 58) + Expo Router + Typ
 
 ## 2. Cara Build APK & Install ke HP Toko
 
-Proyek ini sudah dikonfigurasi di [eas.json](eas.json) dan [app.config.ts](app.config.ts) untuk menghasilkan file `.apk` Android secara langsung melalui **EAS Build**:
+### Opsi 1 — Build Lokal 1-Perintah & Otomatis Masuk ke Web `Apps_Toko_Rejeki` (Disarankan)
+
+Karena Windows memiliki batas panjang path 260 karakter pada CMake/Ninja dan dashboard gratis Expo menghapus file APK setelah 14 hari, proyek ini menyediakan perintah otomatis **`npm run build:apk`**:
+
+```powershell
+npm run build:apk
+```
+
+Perintah di atas secara otomatis:
+1. Menyinkronkan kode ke folder kerja ber-path pendek (`C:\t` + staging CMake `C:\cx`) agar bebas dari batas 260 karakter Windows.
+2. Menjalankan `expo prebuild` dan Gradle `assembleRelease` (`arm64-v8a`) secara lokal tanpa antre di cloud Expo.
+3. Menyimpan hasil file **`toko-rejeki-pos.apk`** langsung ke:
+   - `dist/toko-rejeki-pos.apk` (di proyek mobile ini)
+   - `../Apps_Toko_Rejeki/apps/public/downloads/toko-rejeki-pos.apk` (langsung siap diunduh lewat tombol **"Unduh Aplikasi Mobile (.APK)"** di halaman Login web `Apps_Toko_Rejeki`).
+
+### Opsi 2 — Build via Cloud EAS Build
+
+Proyek ini juga sudah dikonfigurasi di [eas.json](eas.json) dan [app.config.ts](app.config.ts) jika sewaktu-waktu ingin mem-build lewat cloud **EAS Build**:
 
 1. Install dan login ke EAS CLI (cukup dilakukan sekali):
    ```powershell
@@ -51,12 +68,15 @@ Proyek ini sudah dikonfigurasi di [eas.json](eas.json) dan [app.config.ts](app.c
 ## 3. Alur Update Aplikasi ke HP Toko
 
 ### Cara A — Build & Install APK Baru (Alur Standar)
-Gunakan alur ini setiap kali ada pembaruan aplikasi, terutama jika ada perubahan library native, izin, atau konfigurasi di `app.config.ts`:
-1. Edit kode dan pastikan lulus pengecekan (`npm run typecheck` & `npm test`).
-2. Commit perubahan ke Git (`git add .` & `git commit`).
-3. Jalankan ulang `eas build --platform android --profile preview`.
-4. Unduh APK baru di HP toko lalu **install langsung menimpa aplikasi yang lama** (tidak perlu uninstall).
-   > Selama `android.package` (`com.tokorejeki.posmobile`) dan akun/keystore EAS tidak berubah, **data sesi login, pengaturan printer lokal, dan cache katalog SQLite tetap aman**.
+Gunakan alur ini setiap kali ada pembaruan aplikasi:
+1. Edit kode di proyek mobile ini dan pastikan lulus pengecekan (`npm run typecheck` & `npm test`).
+2. Jalankan perintah build lokal:
+   ```powershell
+   npm run build:apk
+   ```
+3. File `toko-rejeki-pos.apk` terbaru akan otomatis ter-update di dalam `Apps_Toko_Rejeki/apps/public/downloads/toko-rejeki-pos.apk`.
+4. Commit & push proyek web `Apps_Toko_Rejeki`, lalu di HP toko cukup klik tombol **Unduh Aplikasi Mobile (.APK)** di halaman Login web dan **install langsung menimpa aplikasi lama** (tidak perlu uninstall).
+   > Selama di-build dari komputer/keystore yang sama dan `android.package` (`com.tokorejeki.posmobile`) tidak berubah, **data sesi login, pengaturan printer lokal, dan cache katalog SQLite tetap aman**.
 
 ### Cara B — Update Instan Tanpa Download APK (`eas update` / OTA) *(Opsional)*
 Jika ke depan Anda sering memperbarui tampilan UI atau logika TypeScript/JavaScript tanpa menambah modul native baru:
