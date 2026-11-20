@@ -87,7 +87,8 @@ import type { Product } from "@/types";
 type KasirSegment = "catalog" | "cart";
 
 export default function KasirScreen() {
-  const { user, role, storeSettings, serverConfig } = useAuth();
+  const { user, role, storeSettings, serverConfig, refreshStoreSettings } =
+    useAuth();
 
   const tabs = usePosCartStore((s) => s.tabs);
   const activeTabId = usePosCartStore((s) => s.activeTabId);
@@ -123,6 +124,9 @@ export default function KasirScreen() {
   const switchSegmentAnimated = (nextSegment: KasirSegment) => {
     if (nextSegment === segment) {
       return;
+    }
+    if (nextSegment === "cart") {
+      void refreshStoreSettings();
     }
     setSegment(nextSegment);
     setIsSliding(true);

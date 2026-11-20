@@ -28,16 +28,12 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useSystemStatus } from "@/context/SystemStatusContext";
 import { buildCompletedOrderPayload } from "@/domain/pricing";
-import {
-  triggerServerTestPrint,
-  updateStoreSettings,
-} from "@/services/api/settingsApi";
+import { triggerServerTestPrint } from "@/services/api/settingsApi";
 import {
   executeReceiptPrint,
   isBluetoothEscPosSupported,
   scanPairedBluetoothPrinters,
 } from "@/services/print/printerService";
-import { setCachedStoreSettings } from "@/services/storage/secureStorage";
 import {
   usePrinterPrefsStore,
   type PairedBluetoothPrinter,
@@ -173,29 +169,14 @@ export default function PengaturanPrinterScreen() {
       setMode(draftMode);
       setBluetoothPaperWidth(draftPaperWidth);
       setStoredPreviewBeforePrint(previewBeforePrint);
-      const nextLocalSettings = {
-        ...(storeSettings ?? { storeName: "Toko Rejeki" }),
-        printerPaperWidth: draftPaperWidth,
-        previewReceiptBeforePrint: previewBeforePrint,
-      };
-      setCachedStoreSettings(nextLocalSettings);
-
-      if (canWriteOnline) {
-        const res = await updateStoreSettings(serverConfig, {
-          printerPaperWidth: draftPaperWidth,
-          previewReceiptBeforePrint: previewBeforePrint,
-        });
-        if (res.ok) {
-          await refreshStoreSettings();
-        }
-      } else {
-        await refreshStoreSettings();
-      }
+      // Pengaturan printer mobile disimpan murni secara lokal tanpa menulis PUT /api/settings
+      // agar konfigurasi desain struk di DB server tidak pernah tertimpa oleh perangkat mobile.
+      await refreshStoreSettings();
 
       setBanner({
         variant: "success",
         message:
-          "Pengaturan metode cetak, ukuran kertas, & pratinjau struk berhasil disimpan.",
+          "Pengaturan metode cetak, ukuran kertas, & pratinjau struk berhasil disimpan secara lokal.",
       });
     } finally {
       setIsSaving(false);

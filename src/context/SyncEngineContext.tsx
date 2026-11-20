@@ -82,7 +82,7 @@ export function SyncEngineProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, serverConfig } = useAuth();
+  const { user, serverConfig, refreshStoreSettings } = useAuth();
   const {
     isAppActive,
     isDeviceConnected,
@@ -201,6 +201,14 @@ export function SyncEngineProvider({
             failureCountRef.current = 0;
             setSyncStatus("success");
             setLastError(null);
+            if (
+              options?.forceFull ||
+              options?.trigger === "boot" ||
+              options?.trigger === "manual" ||
+              options?.trigger === "db_reconnected"
+            ) {
+              void refreshStoreSettings();
+            }
           } else if (res.mode === "skipped") {
             setSyncStatus("paused_offline");
           } else {
@@ -302,7 +310,8 @@ export function SyncEngineProvider({
       setCatalogVersion((v) => v + 1);
     }
     await refreshMetadataSnapshot();
-  }, [refreshMetadataSnapshot]);
+    void refreshStoreSettings();
+  }, [refreshMetadataSnapshot, refreshStoreSettings]);
 
   const loadRecentAudits = useCallback(async (limit = 10) => {
     return getRecentSyncAudits(limit);
